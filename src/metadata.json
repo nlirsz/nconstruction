@@ -1,0 +1,8 @@
+{
+  "name": "nConstruction",
+  "description": "Sistema Integrado de Gestão de Obras tailored for Resident Engineers. Focuses on top-down auditing, dynamic scheduling, and automated reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
