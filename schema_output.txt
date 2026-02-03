@@ -1,0 +1,17 @@
+[
+  "id",
+  "project_id",
+  "name",
+  "start_date",
+  "end_date",
+  "progress",
+  "status",
+  "dependencies",
+  "assigned_to",
+  "created_at",
+  "start",
+  "end",
+  "custom_id",
+  "description",
+  "image_url"
+]
