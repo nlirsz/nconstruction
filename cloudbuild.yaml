@@ -13,11 +13,11 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'nconstruction-app'
+      - 'nconstruction'
       - '--image'
       - 'gcr.io/$PROJECT_ID/nconstruction-app:$COMMIT_SHA'
       - '--region'
-      - 'us-central1'
+      - 'us-west1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
