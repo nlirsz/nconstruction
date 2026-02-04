@@ -190,18 +190,18 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto custom-scrollbar bg-slate-50/20">
+            <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
                 {tabMode === 'list' ? (
-                    <div className="w-full">
+                    <div className="w-full min-w-[700px]">
                         {/* Desktop View */}
-                        <table className="hidden md:table w-full text-left border-collapse min-w-[700px]">
+                        <table className="hidden md:table w-full text-left border-collapse">
                             <thead className="sticky top-0 bg-white z-20 shadow-sm border-b border-slate-200">
                                 <tr>
-                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest w-24">Setor</th>
-                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest">Descrição da Atividade</th>
-                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center w-28">Status</th>
-                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest w-40">Progresso Físico</th>
-                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right w-24">Ação</th>
+                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest w-24 bg-white">Setor</th>
+                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest bg-white">Descrição da Atividade</th>
+                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-center w-28 bg-white">Status</th>
+                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest w-40 bg-white">Progresso Físico</th>
+                                    <th className="px-4 py-2.5 text-[8px] font-black text-slate-400 uppercase tracking-widest text-right w-24 bg-white">Ação</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -213,8 +213,9 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                                 {pendingTasks.map((task) => {
                                     const hasConflict = checkConflict(task, tasks);
                                     const isOverdue = new Date(task.end) < new Date() && task.progress < 100;
+                                    const isActiveToday = new Date(task.start) <= new Date() && new Date(task.end) >= new Date() && task.status !== TaskStatus.COMPLETED;
                                     return (
-                                        <tr key={task.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer" onClick={() => handleOpenEdit(task)}>
+                                        <tr key={task.id} className={`hover:bg-blue-50/30 transition-colors group cursor-pointer ${isActiveToday ? 'bg-blue-50/40' : ''}`} onClick={() => handleOpenEdit(task)}>
                                             <td className="px-4 py-2">
                                                 <div className="flex items-center gap-2">
                                                     <div className={`w-2 h-2 rounded-full ${getSectorColor(task.linked_phase_id)}`} />
@@ -396,22 +397,28 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col h-full bg-white">
-                        <div className="flex overflow-x-auto overflow-y-hidden custom-scrollbar border-b border-slate-200 sticky top-0 bg-white z-30">
-                            <div className="w-40 shrink-0 bg-slate-50 border-r border-slate-200 px-3 py-2 text-[8px] font-black uppercase text-slate-400">Atividade</div>
-                            <div className="flex-1 flex">
+                    <div className="min-w-fit flex flex-col relative w-full">
+                        {/* Header Row: Corner + Dates */}
+                        <div className="flex sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm min-w-max">
+                            <div className="sticky left-0 z-50 w-72 shrink-0 bg-white border-r border-slate-200 px-3 py-2 text-[8px] font-black uppercase text-slate-400 flex items-center justify-between shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]">
+                                <span>Atividade</span>
+                                <span className="opacity-50">{sortedTasks.length} Registros</span>
+                            </div>
+                            <div className="flex">
                                 {timelineDates.map((date, idx) => {
                                     const isToday = date.toDateString() === new Date().toDateString();
                                     return (
-                                        <div key={idx} className={`w-8 shrink-0 text-center py-2 border-r border-slate-100 flex flex-col items-center ${isToday ? 'bg-blue-50' : ''}`}>
-                                            <span className="text-[6px] font-black text-slate-400 uppercase">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(date)}</span>
-                                            <span className={`text-[8px] font-black mt-0.5 ${isToday ? 'text-blue-600' : 'text-slate-600'}`}>{date.getDate()}</span>
+                                        <div key={idx} className={`w-8 shrink-0 text-center py-2 border-r border-slate-100 flex flex-col items-center justify-center ${isToday ? 'bg-blue-50' : 'bg-white'}`}>
+                                            <span className="text-[6px] font-black text-slate-400 uppercase leading-none mb-0.5">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(date)}</span>
+                                            <span className={`text-[8px] font-black leading-none ${isToday ? 'text-blue-600' : 'text-slate-600'}`}>{date.getDate()}</span>
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+
+                        {/* Body */}
+                        <div className="min-w-max">
                             {sortedTasks.map(task => {
                                 const start = parseLocalDate(task.start);
                                 const end = parseLocalDate(task.end);
@@ -420,28 +427,30 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
 
                                 if (end < timelineStart || start > timelineEnd) return null;
 
+                                const isActiveToday = start <= new Date() && end >= new Date() && task.status !== TaskStatus.COMPLETED;
+
                                 const leftOffset = Math.max(0, Math.floor((start.getTime() - timelineStart.getTime()) / 86400000)) * 32;
                                 const duration = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
                                 const width = duration * 32;
 
                                 return (
-                                    <div key={task.id} className="flex border-b border-slate-50 group hover:bg-slate-50/50">
-                                        <div className="w-40 shrink-0 border-r border-slate-100 px-3 py-2 flex flex-col justify-center overflow-hidden">
+                                    <div key={task.id} className="flex border-b border-slate-50 group hover:bg-slate-50/50 min-w-max">
+                                        <div className={`sticky left-0 z-30 w-72 shrink-0 bg-white border-r border-slate-100 px-3 py-2 flex flex-col justify-center overflow-hidden shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] group-hover:bg-blue-50/10 transition-colors ${isActiveToday ? 'bg-blue-50/80 border-l-4 border-l-blue-500' : ''}`}>
                                             <div className="flex items-center gap-1.5">
                                                 <div className={`w-2 h-2 rounded-full shrink-0 ${getSectorColor(task.linked_phase_id)}`} />
-                                                <span className="text-[9px] font-bold text-slate-800 uppercase truncate">{task.name}</span>
+                                                <span className={`text-[9px] font-bold uppercase truncate leading-tight ${isActiveToday ? 'text-blue-700' : 'text-slate-800'}`}>{task.name}</span>
                                             </div>
-                                            <span className="text-[7px] font-semibold text-slate-400 uppercase truncate">{task.customId || 'Atividade Geral'}</span>
+                                            <span className="text-[7px] font-semibold text-slate-400 uppercase truncate pl-3.5">{task.customId || 'Atividade Geral'}</span>
                                         </div>
-                                        <div className="flex-1 relative h-10 flex items-center group/timeline">
+                                        <div className="flex relative h-10 items-center">
                                             <div
                                                 onClick={() => handleOpenEdit(task)}
-                                                className={`absolute h-6 rounded-lg shadow-sm cursor-pointer transition-transform hover:scale-[1.01] flex items-center px-1.5 overflow-hidden border border-white/20 ${task.status === TaskStatus.COMPLETED ? 'bg-emerald-500' : getSectorColor(task.linked_phase_id)}`}
+                                                className={`absolute h-5 rounded shadow-sm cursor-pointer transition-transform hover:scale-[1.01] flex items-center px-1 overflow-hidden border border-white/20 select-none ${task.status === TaskStatus.COMPLETED ? 'bg-emerald-500' : getSectorColor(task.linked_phase_id)}`}
                                                 style={{ left: `${leftOffset}px`, width: `${width}px` }}
                                             >
                                                 <div className="absolute inset-0 bg-black/10 transition-all" style={{ width: `${100 - task.progress}%`, left: `${task.progress}%` }}></div>
-                                                <div className="flex items-center justify-between w-full relative z-10 px-0.5">
-                                                    <span className="text-[6px] font-black text-white uppercase truncate">{task.progress}%</span>
+                                                <div className="flex items-center justify-between w-full relative z-10">
+                                                    <span className="text-[6px] font-black text-white uppercase truncate px-0.5">{task.progress}%</span>
                                                     {checkConflict(task, tasks) && <AlertTriangle size={8} className="text-white animate-pulse" />}
                                                 </div>
                                             </div>

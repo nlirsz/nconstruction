@@ -5,16 +5,30 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 async function checkSchema() {
-    const { data, error } = await supabase.from('tasks').select('*').limit(1)
-    if (error) {
-        console.error('Error fetching tasks:', error)
-        return
-    }
-    if (data && data.length > 0) {
-        fs.writeFileSync('schema_output.txt', JSON.stringify(Object.keys(data[0]), null, 2))
-        console.log('Schema written to schema_output.txt')
-    } else {
-        console.log('No tasks found to inspect columns.')
+    try {
+        console.log("Checking connection...");
+        const { data, error } = await supabase.from('projects').select('id').limit(1);
+        console.log("Projects check:", { data, error });
+
+        if (error || !data || data.length === 0) {
+            console.warn("Could not fetch a project. RLS might be blocking anon access, or no projects exist.");
+            // We can't proceed with insert if we don't have a valid project_id FK usually.
+            // But let's try to see if table exists by selecting from it.
+        }
+
+        console.log("Checking project_photos existence...");
+        const { error: photoError } = await supabase.from('project_photos').select('id').limit(1);
+        if (photoError) {
+            console.error("Table check failed:", photoError);
+            if (photoError.code === 'PGRST205') {
+                console.error("CONFIRMED: Table project_photos does not exist or is hidden.");
+            }
+        } else {
+            console.log("Table project_photos accessible.");
+        }
+
+    } catch (e) {
+        console.error('Unexpected error:', e);
     }
 }
 

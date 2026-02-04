@@ -4,7 +4,7 @@ import { Project, ProjectPhoto, PhotoCategory } from '../types';
 import { supabase, uploadImage } from '../services/supabaseClient';
 import {
     Image as ImageIcon, Filter, MapPin, Tag, Search, X, Loader2,
-    Upload, Camera, Trash2, Calendar, User, CheckCircle2, Edit2, Save
+    Upload, Camera, Trash2, Calendar, User, CheckCircle2, Edit2, Save, Building2, Home
 } from 'lucide-react';
 
 interface GalleryTabProps {
@@ -29,8 +29,44 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
 
     // Filter States
     const [filterCategory, setFilterCategory] = useState<PhotoCategory | 'all'>('all');
+    const [filterPhase, setFilterPhase] = useState<string>('all');
+    const [filterSubtask, setFilterSubtask] = useState<string>('all');
     const [filterLocation, setFilterLocation] = useState<string>('all');
+    const [filterFloor, setFilterFloor] = useState<string>('all');
+    const [filterUnit, setFilterUnit] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Derived Lists for Filters
+    const availablePhases = useMemo(() => project.phases || [], [project.phases]);
+    const availableSubtasks = useMemo(() => {
+        if (filterPhase === 'all') {
+            return Array.from(new Set(availablePhases.flatMap(p => p.subtasks || [])));
+        }
+        const selectedPhase = availablePhases.find(p => p.id === filterPhase);
+        return selectedPhase?.subtasks || [];
+    }, [availablePhases, filterPhase]);
+
+    const availableFloors = useMemo(() => {
+        const floors = new Set<string>();
+        project.structure?.levels?.forEach(l => floors.add(l.label));
+        return Array.from(floors);
+    }, [project.structure]);
+
+    const availableUnits = useMemo(() => {
+        const units = new Set<string>();
+        project.structure?.levels?.forEach(l => {
+            l.units?.forEach(u => units.add(u.name));
+        });
+        return Array.from(units);
+    }, [project.structure]);
+
+    // Extended Type for Local State
+    type EnhancedPhoto = ProjectPhoto & {
+        phaseId?: string;
+        subtask?: string;
+        floor?: string;
+        unit?: string;
+    };
 
     // Upload Form State
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -52,18 +88,142 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
     const fetchPhotos = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            // 1. Fetch "Official" Gallery Photos
+            const { data: galleryData, error } = await supabase
                 .from('project_photos')
                 .select('*')
                 .eq('project_id', project.id)
                 .order('created_at', { ascending: false });
 
-            if (data && !error) {
-                setPhotos(data);
-            } else if (error && error.code === '42P01') {
-                console.warn("Table project_photos not found.");
-                setPhotos([]);
-            }
+            // 2. Fetch "Execution" Photos (from unit_progress)
+            // We need to fetch details to construct valid gallery items:
+            // - unit_id -> unit name (we need project_units for this)
+            // - phase_id -> category mapping
+            // - subtasks -> photos extraction
+            const { data: executionData } = await supabase
+                .from('unit_progress')
+                .select('phase_id, subtasks, unit_id, updated_at')
+                .eq('project_id', project.id);
+
+            // To map unit_id to a readable name, we need all units.
+            // Assuming `project.structure` is populated, we can look it up there.
+            // If `project.structure` is lightweight, we might need to fetch `project_units`...
+            // Let's rely on `project.structure.levels[].units[]` which is usually available in the context.
+            // Helper to find unit name:
+            const findUnitName = (uid: string) => {
+                let name = 'Unidade Desconhecida';
+                let floor = '';
+                project.structure?.levels?.forEach(l => {
+                    const u = l.units?.find((un: any) => un.id === uid);
+                    if (u) {
+                        name = u.name;
+                        floor = l.label;
+                    }
+                });
+                return { name, floor };
+            };
+
+            const categoryMap: Record<string, PhotoCategory> = {
+                'structure': 'structural', 'structural': 'structural', 'masonry': 'structural',
+                'installations': 'installations', 'hydraulic': 'installations', 'electrical': 'installations',
+                'finishing': 'finishing', 'painting': 'finishing', 'flooring': 'finishing'
+            };
+
+            const executionPhotos: ProjectPhoto[] = [];
+
+            executionData?.forEach((row: any) => {
+                const { name: unitName, floor } = findUnitName(row.unit_id);
+                // Heuristic category mapping
+                let cat: PhotoCategory = categoryMap[row.phase_id?.toLowerCase() || ''] || 'inspection';
+                if (cat === 'inspection' && row.phase_id) {
+                    const pLower = row.phase_id.toLowerCase();
+                    if (pLower.includes('estrut')) cat = 'structural';
+                    else if (pLower.includes('instal') || pLower.includes('hidr') || pLower.includes('elet')) cat = 'installations';
+                    else if (pLower.includes('acab') || pLower.includes('pint') || pLower.includes('revest')) cat = 'finishing';
+                }
+
+                // Extract Subtask Photos
+                if (row.subtasks) {
+                    Object.entries(row.subtasks).forEach(([key, val]: [string, any]) => {
+                        // Extract "photos" array if it exists
+                        if (typeof val === 'object' && val.photos && Array.isArray(val.photos)) {
+                            val.photos.forEach((p: any) => {
+                                executionPhotos.push({
+                                    id: `exec-${p.id || Math.random().toString(36)}`, // Prefix to avoid collision if ID is simple
+                                    project_id: project.id,
+                                    url: p.url,
+                                    description: p.description || `${key} - ${unitName}`,
+                                    category: cat,
+                                    location_label: `${floor} • ${unitName}`,
+                                    created_at: p.created_at || row.updated_at || new Date().toISOString(),
+                                    created_by: 'Execução'
+                                });
+                            });
+                        }
+                        // Legacy single image URL?
+                        else if (typeof val === 'object' && val.imageUrl) {
+                            executionPhotos.push({
+                                id: `exec-legacy-${key}-${row.unit_id}`,
+                                project_id: project.id,
+                                url: val.imageUrl,
+                                description: `${key} - Foto Antiga`,
+                                category: cat,
+                                location_label: `${floor} • ${unitName}`,
+                                created_at: row.updated_at || new Date().toISOString(),
+                                created_by: 'Execução'
+                            });
+                        }
+                    });
+                }
+            });
+
+            // 3. Merge & Deduplicate
+            // We want to combine the "Official" gallery records with the rich metadata from "Execution" records.
+            // If a photo exists in both, we use the ProjectPhoto ID from the official table but the Metadata (Phase/Subtask) from the Execution data.
+
+            // Create a lookup map for execution metadata by URL
+            const metadataMap = new Map<string, { phaseId: string; subtask: string }>();
+            executionPhotos.forEach(ep => {
+                const e = ep as EnhancedPhoto;
+                metadataMap.set(e.url, {
+                    phaseId: e.phaseId || '',
+                    subtask: e.subtask || ''
+                });
+            });
+
+            const mergedPhotos: EnhancedPhoto[] = (galleryData || []).map((p: any) => {
+                const meta = metadataMap.get(p.url);
+
+                // Extract floor and unit from location_label (format: "Floor • Unit")
+                let floor = '';
+                let unit = '';
+                if (p.location_label) {
+                    const parts = p.location_label.split('•').map((s: string) => s.trim());
+                    if (parts.length >= 2) {
+                        floor = parts[0];
+                        unit = parts[1];
+                    }
+                }
+
+                return {
+                    ...p,
+                    // Priority: 1. DB Columns (new), 2. Merge Metadata (legacy sync), 3. Default
+                    phaseId: p.phase || meta?.phaseId || 'general',
+                    subtask: p.subtask || meta?.subtask || 'general',
+                    floor: floor,
+                    unit: unit
+                };
+            });
+
+            const existingUrls = new Set(mergedPhotos.map(p => p.url));
+            const legacyExecutionPhotos = executionPhotos.filter(p => !existingUrls.has(p.url));
+
+            const allPhotos = [...mergedPhotos, ...legacyExecutionPhotos].sort((a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+
+            setPhotos(allPhotos);
+
         } catch (err) {
             console.error("Error fetching photos", err);
         } finally {
@@ -77,6 +237,17 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
         if (project.structure?.levels) {
             project.structure.levels.forEach(l => {
                 if (!locs.includes(l.label)) locs.push(l.label);
+                // Add units for granular filtering
+                if (l.units) {
+                    l.units.forEach((u: any) => {
+                        // We format it to match how it's saved: "Floor • Unit"
+                        // But usually users search by unit name. 
+                        // Let's add just the Unit Name so filtering by "Apt 101" works if the label contains it.
+                        // But the saved label is "Floor - Unit". 
+                        // If I filter by "Apt 101", and the label is "1º Pav - Apt 101", .includes("Apt 101") works.
+                        locs.push(u.name);
+                    });
+                }
             });
         }
         return locs;
@@ -86,12 +257,19 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
         return photos.filter(p => {
             const matchSearch = p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 p.location_label.toLowerCase().includes(searchTerm.toLowerCase());
+
             const matchCat = filterCategory === 'all' || p.category === filterCategory;
-            // IMPORTANT FIX: Use .includes() for location to match "Pavimento 1 - Apto 101" with "Pavimento 1" filter
             const matchLoc = filterLocation === 'all' || p.location_label.toLowerCase().includes(filterLocation.toLowerCase());
-            return matchSearch && matchCat && matchLoc;
+
+            // New Filters Logic
+            const matchPhase = filterPhase === 'all' || (p.phaseId === filterPhase);
+            const matchSubtask = filterSubtask === 'all' || (p.subtask === filterSubtask);
+            const matchFloor = filterFloor === 'all' || (p.floor === filterFloor);
+            const matchUnit = filterUnit === 'all' || (p.unit === filterUnit);
+
+            return matchSearch && matchCat && matchLoc && matchPhase && matchSubtask && matchFloor && matchUnit;
         });
-    }, [photos, searchTerm, filterCategory, filterLocation]);
+    }, [photos, searchTerm, filterCategory, filterLocation, filterPhase, filterSubtask, filterFloor, filterUnit]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -135,13 +313,45 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
         }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: string, url?: string) => {
         if (!confirm("Tem certeza que deseja excluir esta foto da galeria?")) return;
+
+        // 1. Delete from Storage (if URL is provided)
+        if (url) {
+            try {
+                // Extract relative path from public URL
+                // Example: .../project-images/gallery/project_id/filename.webp
+                // We need: gallery/project_id/filename.webp
+                const urlObj = new URL(url);
+                const pathParts = urlObj.pathname.split('/project-images/');
+                if (pathParts.length > 1) {
+                    const storagePath = decodeURIComponent(pathParts[1]);
+                    await supabase.storage.from('project-images').remove([storagePath]); // Use list for removal
+                }
+            } catch (err) {
+                console.warn("Could not delete from storage, proceeding to DB delete.", err);
+            }
+        }
+
+        // 2. Delete from Database
+        if (id.startsWith('exec-')) {
+            // These are virtual IDs from unit_progress
+            // We need to find and remove the photo from the unit_progress JSONB
+            // For now, just remove from local state - it will resync on next load
+            // TODO: Implement proper deletion from unit_progress.subtasks JSONB
+            setPhotos(prev => prev.filter(p => p.id !== id));
+            if (lightboxPhoto?.id === id) setLightboxPhoto(null);
+            alert("Foto removida da visualização. Para exclusão permanente, remova pela aba Execução.");
+            return;
+        }
 
         const { error } = await supabase.from('project_photos').delete().eq('id', id);
         if (!error) {
             setPhotos(prev => prev.filter(p => p.id !== id));
             if (lightboxPhoto?.id === id) setLightboxPhoto(null);
+        } else {
+            console.error("Delete error:", error);
+            alert('Erro ao excluir do banco de dados');
         }
     };
 
@@ -194,8 +404,8 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
                     </button>
                 </div>
 
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-4">
-                    <div className="relative flex-1">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-start gap-4">
+                    <div className="w-full relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
                             type="text"
@@ -205,26 +415,84 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
                             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all text-slate-700"
                         />
                     </div>
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+
+                    <div className="w-full flex flex-wrap gap-2">
+                        {/* Location Filter */}
                         <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg min-w-fit">
                             <MapPin size={14} className="text-slate-400" />
                             <select
                                 value={filterLocation}
                                 onChange={e => setFilterLocation(e.target.value)}
-                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer"
+                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer max-w-[150px] truncate"
                             >
-                                <option value="all">Todos os Locais</option>
+                                <option value="all">Locais</option>
                                 {projectLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
                             </select>
                         </div>
+
+                        {/* Phase Filter - NEW */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg min-w-fit">
+                            <Filter size={14} className="text-slate-400" />
+                            <select
+                                value={filterPhase}
+                                onChange={e => { setFilterPhase(e.target.value); setFilterSubtask('all'); }}
+                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer max-w-[150px] truncate"
+                            >
+                                <option value="all">Setores</option>
+                                {availablePhases.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Subtask Filter - NEW */}
+                        {availableSubtasks.length > 0 && (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg min-w-fit animate-in fade-in duration-300">
+                                <CheckCircle2 size={14} className="text-slate-400" />
+                                <select
+                                    value={filterSubtask}
+                                    onChange={e => setFilterSubtask(e.target.value)}
+                                    className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer max-w-[150px] truncate"
+                                >
+                                    <option value="all">Atividades</option>
+                                    {availableSubtasks.map(st => <option key={st} value={st}>{st}</option>)}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Floor Filter - NEW */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg min-w-fit">
+                            <Building2 size={14} className="text-slate-400" />
+                            <select
+                                value={filterFloor}
+                                onChange={e => setFilterFloor(e.target.value)}
+                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer max-w-[150px] truncate"
+                            >
+                                <option value="all">Pavimentos</option>
+                                {availableFloors.map(floor => <option key={floor} value={floor}>{floor}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Unit Filter - NEW */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg min-w-fit">
+                            <Home size={14} className="text-slate-400" />
+                            <select
+                                value={filterUnit}
+                                onChange={e => setFilterUnit(e.target.value)}
+                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer max-w-[150px] truncate"
+                            >
+                                <option value="all">Unidades</option>
+                                {availableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Category Filter */}
                         <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg min-w-fit">
                             <Tag size={14} className="text-slate-400" />
                             <select
                                 value={filterCategory}
                                 onChange={e => setFilterCategory(e.target.value as any)}
-                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer"
+                                className="bg-transparent text-sm font-bold text-slate-600 outline-none cursor-pointer max-w-[150px] truncate"
                             >
-                                <option value="all">Todas as Categorias</option>
+                                <option value="all">Categorias</option>
                                 {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
                             </select>
                         </div>
@@ -270,7 +538,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
                                             <MapPin size={12} className="text-blue-500 shrink-0" />
                                             <span className="truncate">{photo.location_label}</span>
                                         </div>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(photo.id); }} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(photo.id, photo.url); }} className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
                             </div>
@@ -365,7 +633,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
                         <button onClick={() => setIsEditingPhoto(!isEditingPhoto)} className={`p-4 md:p-3 rounded-full transition-colors ${isEditingPhoto ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-white'}`}>
                             <Edit2 size={24} className="md:w-5 md:h-5" />
                         </button>
-                        <button onClick={() => handleDelete(lightboxPhoto.id)} className="p-4 md:p-3 bg-white/10 hover:bg-red-500/20 text-white/70 hover:text-red-400 rounded-full transition-colors"><Trash2 size={24} className="md:w-5 md:h-5" /></button>
+                        <button onClick={() => handleDelete(lightboxPhoto.id, lightboxPhoto.url)} className="p-4 md:p-3 bg-white/10 hover:bg-red-500/20 text-white/70 hover:text-red-400 rounded-full transition-colors"><Trash2 size={24} className="md:w-5 md:h-5" /></button>
                         <button onClick={() => setLightboxPhoto(null)} className="p-4 md:p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"><X size={28} className="md:w-6 md:h-6" /></button>
                     </div>
 
@@ -405,21 +673,41 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
                                     </div>
                                 </div>
                             ) : (
-                                <>
-                                    <div className="flex flex-wrap gap-3 mb-3">
-                                        <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full backdrop-blur-sm border border-white/10">
-                                            {CATEGORIES.find(c => c.id === lightboxPhoto.category)?.label}
-                                        </span>
-                                        <span className="bg-blue-500/80 text-white text-xs font-bold px-3 py-1 rounded-full backdrop-blur-sm flex items-center gap-1">
-                                            <MapPin size={10} /> {lightboxPhoto.location_label}
-                                        </span>
+                                <div className="grid md:grid-cols-[1fr_200px] gap-6">
+                                    <div className="space-y-3">
+                                        <div className="flex flex-wrap gap-3">
+                                            <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full backdrop-blur-sm border border-white/10">
+                                                {CATEGORIES.find(c => c.id === lightboxPhoto.category)?.label}
+                                            </span>
+                                            <span className="bg-blue-500/80 text-white text-xs font-bold px-3 py-1 rounded-full backdrop-blur-sm flex items-center gap-1">
+                                                <MapPin size={10} /> {lightboxPhoto.location_label}
+                                            </span>
+                                        </div>
+                                        <h3 className="text-lg md:text-xl font-medium leading-relaxed">{lightboxPhoto.description}</h3>
+                                        <div className="flex items-center gap-4 text-white/50 text-sm">
+                                            <span className="flex items-center gap-1.5"><Calendar size={14} /> {new Date(lightboxPhoto.created_at).toLocaleDateString('pt-BR', { dateStyle: 'long' })}</span>
+                                            {lightboxPhoto.created_by && <span className="flex items-center gap-1.5"><User size={14} /> {lightboxPhoto.created_by.split('@')[0]}</span>}
+                                        </div>
                                     </div>
-                                    <h3 className="text-lg md:text-xl font-medium leading-relaxed">{lightboxPhoto.description}</h3>
-                                    <div className="flex items-center gap-4 mt-4 text-white/50 text-sm">
-                                        <span className="flex items-center gap-1.5"><Calendar size={14} /> {new Date(lightboxPhoto.created_at).toLocaleDateString('pt-BR', { dateStyle: 'long' })}</span>
-                                        {lightboxPhoto.created_by && <span className="flex items-center gap-1.5"><User size={14} /> {lightboxPhoto.created_by.split('@')[0]}</span>}
+
+                                    {/* granular details view */}
+                                    <div className="border-l border-white/10 pl-6 space-y-3 hidden md:block">
+                                        <div>
+                                            <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Setor</label>
+                                            <p className="text-sm font-medium text-white/90">
+                                                {(lightboxPhoto as EnhancedPhoto).phaseId ?
+                                                    (availablePhases.find(p => p.id === (lightboxPhoto as EnhancedPhoto).phaseId)?.label || (lightboxPhoto as EnhancedPhoto).phaseId)
+                                                    : '—'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Atividade</label>
+                                            <p className="text-sm font-medium text-white/90">
+                                                {(lightboxPhoto as EnhancedPhoto).subtask === '_MACRO_' ? 'Visão Geral' : ((lightboxPhoto as EnhancedPhoto).subtask || '—')}
+                                            </p>
+                                        </div>
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
                     </div>

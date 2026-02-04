@@ -6,7 +6,7 @@ import {
     GripHorizontal, Plus, Camera, Loader2, Save,
     Trash2, ListChecks, Building2, MapPin, ShieldAlert, Droplets, LayoutGrid,
     CheckCircle2, X, AlertTriangle, History, ImageIcon, ScanSearch, FileSpreadsheet,
-    RefreshCcw, LayersIcon, ListTodo, Info, Tag, ArrowRight, Edit2, Link, GalleryHorizontal, Calendar, ArrowUpRight, Maximize2
+    RefreshCcw, LayersIcon, ListTodo, Info, Tag, ArrowRight, Edit2, Link, GalleryHorizontal, Calendar, ArrowUpRight, Maximize2, Bell, ImagePlus, Eye
 } from 'lucide-react';
 import { DEFAULT_PHASES, getPhaseIcon, getPhaseColor } from '../constants';
 
@@ -34,10 +34,70 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
     const [isMassUpdateOpen, setIsMassUpdateOpen] = useState(false);
     const [massUpdateData, setMassUpdateData] = useState({ phaseId: '', progress: 0, subtasks: [] as string[] });
     const [massSelectedUnits, setMassSelectedUnits] = useState<string[]>([]);
+    const [isAlertsOpen, setIsAlertsOpen] = useState(false);
 
     const projectPhases: PhaseConfig[] = useMemo(() => {
         return (project.phases && project.phases.length > 0) ? project.phases : DEFAULT_PHASES;
     }, [project.phases]);
+
+    const getFloorLabel = (floor: number) => {
+        if (project.structure?.levels) { const level = project.structure.levels.find(l => l.order === floor); if (level) return level.label; }
+        return `${floor}º Pav.`;
+    };
+
+    const alertsList = useMemo(() => {
+        const list: any[] = [];
+        data.forEach((floor, fIdx) => {
+            floor.units.forEach((unit: any, uIdx: number) => {
+                Object.entries(unit.phases || {}).forEach(([phaseId, phaseData]: [string, any]) => {
+                    const phaseConfig = projectPhases.find(p => p.id === phaseId);
+                    if (!phaseConfig) return;
+
+                    Object.entries(phaseData.subtasks || {}).forEach(([taskName, taskData]: [string, any]) => {
+                        const progress = typeof taskData === 'object' ? taskData.progress : taskData;
+                        const photos = typeof taskData === 'object' ? taskData.photos : [];
+                        const ignored = typeof taskData === 'object' ? taskData.ignored_alert : false;
+
+                        if (progress === 100 && (!photos || photos.length === 0) && !ignored) {
+                            list.push({
+                                id: `${unit.id}-${phaseId}-${taskName}`,
+                                floorLabel: getFloorLabel(floor.floor),
+                                unitName: unit.name,
+                                phaseLabel: phaseConfig.label,
+                                taskName,
+                                fIdx,
+                                uIdx,
+                                phaseId
+                            });
+                        }
+                    });
+                });
+            });
+        });
+        return list;
+    }, [data, projectPhases]);
+
+    const handleIgnoreAlert = async (alertItem: any) => {
+        const newData = JSON.parse(JSON.stringify(data));
+        const unit = newData[alertItem.fIdx].units[alertItem.uIdx];
+        const phase = unit.phases[alertItem.phaseId];
+        const taskData = phase.subtasks[alertItem.taskName];
+
+        const newSubtaskData = typeof taskData === 'object' ? { ...taskData, ignored_alert: true } : { progress: taskData, ignored_alert: true };
+        phase.subtasks[alertItem.taskName] = newSubtaskData;
+        setData(newData);
+
+        await supabase.from('unit_progress').upsert({
+            project_id: project.id,
+            unit_id: unit.id,
+            phase_id: alertItem.phaseId,
+            percentage: phase.percentage,
+            subtasks: phase.subtasks,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'unit_id, phase_id' });
+    };
+
+
 
     const activePhasesForUnit = useMemo(() => {
         if (!selectedUnit || !data[selectedUnit.fIdx]) return [];
@@ -86,10 +146,19 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
             const progressMap = new Map();
             progressRows?.forEach((p: any) => {
                 if (!progressMap.has(p.unit_id)) progressMap.set(p.unit_id, {});
+
+                const subtasks = p.subtasks || {};
+                const macroPhotos = subtasks['_MACRO_']?.photos || [];
+                // Filter out the internal _MACRO_ subtask so it doesn't show up as a task in the UI lists if we iterate subtasks later
+                // But we need to keep it in the object if we save it back... 
+                // Actually, the UI iterates over `projectPhases` subtasks list, so extra keys in `subtasks` object are ignored visually
+                // unless we iterate `Object.entries(subtasks)`.
+
                 progressMap.get(p.unit_id)[p.phase_id] = {
                     percentage: p.percentage,
-                    subtasks: p.subtasks || {},
-                    imageUrl: p.image_url
+                    subtasks: subtasks,
+                    imageUrl: p.image_url,
+                    macroPhotos: macroPhotos
                 };
             });
 
@@ -175,74 +244,160 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
         input.accept = 'image/*';
         input.multiple = true;
         input.onchange = async (e: any) => {
-            const files = e.target.files;
-            if (!files || files.length === 0) return;
+            const files = Array.from(e.target.files || []) as File[];
+            if (files.length === 0) return;
 
             setUploadingTask(taskName);
             const unit = data[selectedUnit.fIdx].units[selectedUnit.uIdx];
             const floorLabel = getFloorLabel(data[selectedUnit.fIdx].floor);
-            const dateStr = new Date().toLocaleDateString('pt-BR');
             const locationLabel = `${floorLabel} • ${unit.name}`;
 
-            try {
-                const uploadedPhotos = [];
-                for (const file of files) {
+            // Prepare local update
+            const newData = JSON.parse(JSON.stringify(data));
+            const targetUnit = newData[selectedUnit.fIdx].units[selectedUnit.uIdx];
+            if (!targetUnit.phases[activePhaseId]) targetUnit.phases[activePhaseId] = { percentage: 0, subtasks: {} };
+
+            // Process sequentially
+            for (const file of files) {
+                try {
                     const url = await uploadImage(file, `execution/${project.id}/${unit.id}`);
                     if (url) {
-                        const photoId = Math.random().toString(36).substr(2, 9).toUpperCase();
-                        const description = `${taskName === 'MACRO' ? 'FOTO MACRO' : taskName}`;
+                        const description = `${locationLabel} - ${taskName === 'MACRO' ? 'FOTO MACRO' : taskName}`;
 
-                        // NEW: Sync with project_photos
+                        // 1. Insert into centralized Gallery (project_photos)
+                        const categoryMap: Record<string, PhotoCategory> = {
+                            'structure': 'structural',
+                            'structural': 'structural',
+                            'masonry': 'structural',
+                            'installations': 'installations',
+                            'hydraulic': 'installations',
+                            'electrical': 'installations',
+                            'finishing': 'finishing',
+                            'painting': 'finishing',
+                            'flooring': 'finishing'
+                        };
+                        // Simple heuristic if ID matches known keys, otherwise check string inclusion or default to 'inspection' or 'evolution'
+                        let mappedCategory: PhotoCategory = categoryMap[activePhaseId?.toLowerCase() || ''] || 'inspection';
+
+                        // Heuristic fallback
+                        if (mappedCategory === 'inspection' && activePhaseId) {
+                            const pLower = activePhaseId.toLowerCase();
+                            if (pLower.includes('estrut')) mappedCategory = 'structural';
+                            else if (pLower.includes('instal') || pLower.includes('hidr') || pLower.includes('elet')) mappedCategory = 'installations';
+                            else if (pLower.includes('acab') || pLower.includes('pint') || pLower.includes('revest')) mappedCategory = 'finishing';
+                        }
+
+                        const finalCategory = taskName === 'MACRO' ? 'evolution' : mappedCategory;
+
                         const { data: photoData, error: photoError } = await supabase.from('project_photos').insert({
                             project_id: project.id,
                             url,
                             description: description,
-                            category: taskName === 'MACRO' ? 'evolution' : 'inspection',
+                            category: finalCategory,
                             location_label: locationLabel,
-                            created_by: currentUser?.email
+                            created_by: currentUser?.email,
+                            phase: activePhaseId, // Save the actual Phase ID (Sector Name)
+                            subtask: taskName === 'MACRO' ? '_MACRO_' : taskName, // Save the Subtask Name (Activity)
+                            unit_id: unit.id
                         }).select().single();
 
-                        if (!photoError && photoData) {
-                            uploadedPhotos.push({
-                                id: photoData.id, // Use the real DB ID
-                                url,
-                                description: photoData.description,
-                                created_at: photoData.created_at
-                            });
+
+                        if (photoError) {
+                            console.error("Erro ao salvar na galeria:", photoError.message);
+                        }
+
+                        const newPhoto = photoData ? {
+                            id: photoData.id,
+                            url,
+                            description: photoData.description,
+                            created_at: photoData.created_at
+                        } : {
+                            id: Math.random().toString(36).substr(2, 9),
+                            url,
+                            description: `${new Date().toLocaleDateString()} - ${description}`,
+                            created_at: new Date().toISOString()
+                        };
+
+                        // 2. Update Local State & Prepare for Unit Progress Save
+                        if (taskName === "MACRO") {
+                            const existingPhotos = targetUnit.phases[activePhaseId].macroPhotos || [];
+                            targetUnit.phases[activePhaseId].macroPhotos = [...existingPhotos, newPhoto];
                         } else {
-                            // Fallback if table doesn't exist or error
-                            uploadedPhotos.push({
-                                id: photoId,
-                                url,
-                                description: `${dateStr} - ${description}`,
-                                created_at: new Date().toISOString()
-                            });
+                            const unitSubtasks = targetUnit.phases[activePhaseId].subtasks || {};
+                            const taskData = unitSubtasks[taskName] || { progress: 0, photos: [] };
+                            // Handle legacy single image_url by converting to array if needed
+                            const existingPhotos = taskData.photos || (taskData.imageUrl ? [{ id: 'OLD', url: taskData.imageUrl, description: 'Foto anterior' }] : []);
+
+                            unitSubtasks[taskName] = { ...taskData, photos: [...existingPhotos, newPhoto] };
+                            targetUnit.phases[activePhaseId].subtasks = unitSubtasks;
                         }
                     }
+                } catch (err) {
+                    console.error("Falha no upload individual", err);
                 }
-
-                const newData = JSON.parse(JSON.stringify(data));
-                const targetUnit = newData[selectedUnit.fIdx].units[selectedUnit.uIdx];
-                if (!targetUnit.phases[activePhaseId]) targetUnit.phases[activePhaseId] = { percentage: 0, subtasks: {} };
-
-                if (taskName === "MACRO") {
-                    const existingPhotos = targetUnit.phases[activePhaseId].macroPhotos || [];
-                    targetUnit.phases[activePhaseId].macroPhotos = [...existingPhotos, ...uploadedPhotos];
-                } else {
-                    const unitSubtasks = targetUnit.phases[activePhaseId].subtasks || {};
-                    const taskData = unitSubtasks[taskName] || { progress: 0, photos: [] };
-                    const existingPhotos = taskData.photos || (taskData.imageUrl ? [{ id: 'OLD', url: taskData.imageUrl, description: 'Foto anterior' }] : []);
-                    unitSubtasks[taskName] = { ...taskData, photos: [...existingPhotos, ...uploadedPhotos] };
-                    targetUnit.phases[activePhaseId].subtasks = unitSubtasks;
-                }
-
-                setData(newData);
-            } catch (err) {
-                console.error("Erro no upload", err);
-                alert("Erro ao enviar fotos");
-            } finally {
-                setUploadingTask(null);
             }
+
+            // 3. Persist to unit_progress (CRITICAL FIX)
+            try {
+                const phaseData = targetUnit.phases[activePhaseId];
+                await supabase.from('unit_progress').upsert({
+                    project_id: project.id,
+                    unit_id: unit.id,
+                    phase_id: activePhaseId,
+                    percentage: phaseData.percentage,
+                    subtasks: phaseData.subtasks,
+                    // If we have macro photos, we might need a place for them or assuming they are part of metadata?
+                    // The current schema typically stores subtasks in the `subtasks` column. 
+                    // If `macroPhotos` isn't in `subtasks`, it might be lost if `unit_progress` doesn't have a column for it.
+                    // Checking schema... `unit_progress` usually has `subtasks`. 
+                    // We'll stash macroPhotos in subtasks under a special key or assume the previously viewed code handles it?
+                    // Looking at `loadData`, `subtasks` is read. 
+                    // Let's ensure macroPhotos are saved. If they aren't part of the `subtasks` object in the DB, they need to be.
+                    // We'll inject macroPhotos into the subtasks object with a special key `_MACRO_PHOTOS` if needed, 
+                    // OR check if `unit_progress` has an `image_url` column being used for "Macro" photo? 
+                    // The previous code mapped `imageUrl: p.image_url`. Use that for the LATEST macro photo.
+                    image_url: phaseData.macroPhotos?.slice(-1)[0]?.url || phaseData.image_url,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'unit_id, phase_id' });
+
+                // Also save macro photos if we can't put them in a dedicated column, maybe put them in subtasks?
+                // The previous code seems to rely on `unit.phases[...]` having `macroPhotos`.
+                // In `loadData`: `subtasks: p.subtasks || {}`.
+                // We should store macroPhotos inside `subtasks` as `_general_photos` or similar to persist them if there's no column.
+                // However, `handleAddPhoto` logic above puts them in `targetUnit.phases[activePhaseId].macroPhotos`.
+                // Unless we save that property, it's lost.
+                // Let's modify the save to include macroPhotos in the upsert if possible, or pack it into subtasks.
+
+                // Hack: store macro photos in a special subtask key to ensure persistence
+                if (taskName === 'MACRO') {
+                    // We need to fetch the latest state again? No, we have `targetUnit`.
+                    // Let's rely on the fact that we just updated `targetUnit` above.
+                    // But wait, `upsert` above uses `phaseData.subtasks`.
+                    // We need to ensure `macroPhotos` is inside `subtasks` if we want it saved there.
+                    // OR we rely on `image_url` column for the single main photo.
+                    // The user wants a GALLERY. Single photo isn't enough.
+                    // I will add them to a special subtask `_MACRO_` in the DB.
+                    if (!phaseData.subtasks) phaseData.subtasks = {};
+                    phaseData.subtasks['_MACRO_'] = { photos: phaseData.macroPhotos, progress: 0, hidden: true };
+                }
+
+                await supabase.from('unit_progress').upsert({
+                    project_id: project.id,
+                    unit_id: unit.id,
+                    phase_id: activePhaseId,
+                    percentage: phaseData.percentage,
+                    subtasks: phaseData.subtasks, // activePhaseId subtasks now includes _MACRO_
+                    image_url: phaseData.macroPhotos?.slice(-1)[0]?.url || null,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'unit_id, phase_id' });
+
+            } catch (saveErr) {
+                console.error("Erro ao salvar progresso da unidade", saveErr);
+            }
+
+            // Update State
+            setData(newData);
+            setUploadingTask(null);
         };
         input.click();
     };
@@ -383,10 +538,7 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
         }
     };
 
-    const getFloorLabel = (floor: number) => {
-        if (project.structure?.levels) { const level = project.structure.levels.find(l => l.order === floor); if (level) return level.label; }
-        return `${floor}º Pav.`;
-    };
+
 
     if (loading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-600" size={24} /></div>;
 
@@ -398,6 +550,10 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
                     <div className="flex items-center gap-1.5">
                         <button onClick={handleExportCSV} className="p-1.5 bg-white border border-slate-200 text-slate-400 rounded-lg hover:text-emerald-600 transition-all" title="Exportar CSV"><FileSpreadsheet size={14} /></button>
                         <button onClick={() => setIsMassUpdateOpen(true)} className="p-1.5 bg-white border border-slate-200 text-slate-400 rounded-lg hover:text-blue-600 transition-all" title="Atualização em Massa"><LayersIcon size={14} /></button>
+                        <button onClick={() => setIsAlertsOpen(true)} className="p-1.5 bg-white border border-slate-200 text-slate-400 rounded-lg hover:text-yellow-600 transition-all relative" title="Alertas de Foto">
+                            <Bell size={14} />
+                            {alertsList.length > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] flex items-center justify-center text-white font-black">{alertsList.length}</span>}
+                        </button>
                         <button onClick={loadData} className="p-1.5 bg-white border border-slate-200 text-slate-400 rounded-lg hover:text-blue-600 transition-all"><RefreshCcw size={14} /></button>
                     </div>
                 </div>
@@ -462,7 +618,17 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
                                                 <div className={`p-1.5 rounded-lg text-white shadow-sm ${getPhaseColor(p.color)}`}>{getPhaseIcon(p.icon, 14)}</div>
                                                 <div className="text-right">
                                                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">{p.label}</p>
-                                                    <p className="text-lg font-black text-slate-900 mt-0.5">{unitPhase.percentage}%</p>
+                                                    <div className="flex items-center gap-2 justify-end mt-0.5">
+                                                        {(() => {
+                                                            const hasSubtaskPhotos = Object.values(unitPhase.subtasks || {}).some((t: any) => (typeof t === 'object' && t.photos && t.photos.length > 0) || (typeof t !== 'object' && false));
+                                                            const hasMacroPhotos = unitPhase.macroPhotos && unitPhase.macroPhotos.length > 0;
+                                                            if (hasSubtaskPhotos || hasMacroPhotos) {
+                                                                return <ImagePlus size={12} className="text-emerald-500" />;
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                        <p className="text-lg font-black text-slate-900">{unitPhase.percentage}%</p>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -507,9 +673,23 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => openGallery("FOTOS MACRO", data[selectedUnit.fIdx].units[selectedUnit.uIdx].phases[activePhaseId!]?.macroPhotos || [])}
+                                    onClick={() => {
+                                        const unit = data[selectedUnit.fIdx].units[selectedUnit.uIdx];
+                                        const phase = unit.phases[activePhaseId!];
+                                        let allPhotos = [...(phase.macroPhotos || [])];
+                                        if (phase.subtasks) {
+                                            Object.entries(phase.subtasks).forEach(([key, val]: [string, any]) => {
+                                                // Exclude internal keys like _MACRO_ (already in macroPhotos via loadData logic usually, but let's be safe to avoid dupes if possible, although _MACRO_ only exists in DB load mapping)
+                                                // Actually, checking if val is object and has photos is enough.
+                                                if (key !== '_MACRO_' && typeof val === 'object' && val.photos) {
+                                                    allPhotos = [...allPhotos, ...val.photos];
+                                                }
+                                            });
+                                        }
+                                        openGallery(`FOTOS: ${projectPhases.find(p => p.id === activePhaseId)?.label}`, allPhotos);
+                                    }}
                                     className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-all flex items-center gap-1.5"
-                                    title="Ver Galeria Macro"
+                                    title="Ver Galeria da Fase Completa"
                                 >
                                     <GalleryHorizontal size={18} />
                                 </button>
@@ -793,6 +973,58 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
                         </div>
                         <div className="p-4 border-t border-slate-100 bg-white flex justify-end">
                             <button onClick={() => setGalleryOpen(false)} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest">Fechar Galeria</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Alerts Modal */}
+            {isAlertsOpen && (
+                <div className="fixed inset-0 z-[300] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-in zoom-in duration-300">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-black text-slate-800 uppercase tracking-widest text-[10px] flex items-center gap-2">
+                                <Bell size={16} className="text-yellow-500" /> Pendências de Fotos ({alertsList.length})
+                            </h3>
+                            <button onClick={() => setIsAlertsOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={20} /></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
+                            {alertsList.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400">
+                                    <CheckCircle2 size={40} className="mx-auto mb-2 text-emerald-100" />
+                                    <p className="text-xs font-bold">Nenhuma pendência encontrada!</p>
+                                </div>
+                            ) : (
+                                alertsList.map((alert, i) => (
+                                    <div key={i} className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-start gap-4">
+                                        <div className="bg-yellow-50 p-2 rounded-lg text-yellow-600 shrink-0"><AlertTriangle size={18} /></div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase tracking-wider">{alert.floorLabel} - {alert.unitName}</span>
+                                            </div>
+                                            <h4 className="font-bold text-slate-800 text-xs mb-0.5">{alert.phaseLabel}</h4>
+                                            <p className="text-[10px] text-slate-500 font-medium">{alert.taskName}</p>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedUnit({ fIdx: alert.fIdx, uIdx: alert.uIdx });
+                                                    setActivePhaseId(alert.phaseId);
+                                                    setIsAlertsOpen(false);
+                                                }}
+                                                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Ir para Execução"
+                                            >
+                                                <ArrowUpRight size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleIgnoreAlert(alert)}
+                                                className="p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors" title="Ignorar Alerta"
+                                            >
+                                                <Eye size={14} className="off" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

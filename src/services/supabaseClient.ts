@@ -10,59 +10,85 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * Converte e comprime uma imagem para WebP no lado do cliente
  */
 const compressAndConvertToWebP = async (file: File): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200; // Limite de resolução para web
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
+  return new Promise(async (resolve, reject) => {
+    try {
+      let imageBitmap: ImageBitmap | null = null;
+      let width = 0;
+      let height = 0;
 
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
+      // Prefer createImageBitmap for performance (off-main-thread decoding in some browsers)
+      if ('createImageBitmap' in window) {
+        imageBitmap = await createImageBitmap(file);
+        width = imageBitmap.width;
+        height = imageBitmap.height;
+      } else {
+        // Fallback for older browsers
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        await new Promise((res) => (img.onload = res));
+        width = img.width;
+        height = img.height;
+        imageBitmap = img as any; // Cast to satisfy type, although logic differs slightly
+      }
+
+      if (!imageBitmap) throw new Error("Falha ao processar imagem");
+
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
         }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob(
-          (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Falha na conversão para WebP'));
-          },
-          'image/webp',
-          0.8 // Qualidade 80% (equilíbrio ideal entre peso e nitidez)
-        );
-      };
-    };
-    reader.onerror = (error) => reject(error);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(width);
+      canvas.height = Math.floor(height);
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) throw new Error("Contexto 2D indisponível");
+
+      // Draw image/bitmap
+      ctx.drawImage(imageBitmap as any, 0, 0, canvas.width, canvas.height);
+
+      // Cleanup bitmap to free memory immediately
+      if (imageBitmap && 'close' in imageBitmap) {
+        (imageBitmap as ImageBitmap).close();
+      }
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Falha na conversão para WebP'));
+        },
+        'image/webp',
+        0.75 // Slightly reduced quality for better performance/size ratio on mobile
+      );
+    } catch (error) {
+      reject(error);
+    }
   });
 };
 
 export const uploadImage = async (file: File, path: string): Promise<string | null> => {
   try {
-    // Se for imagem, processa para WebP
-    if (file.type.startsWith('image/')) {
+    // Check if it's an image by MIME type OR file extension
+    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(file.name);
+
+    if (isImage) {
       const webpBlob = await compressAndConvertToWebP(file);
+
       const fileName = `${Math.random().toString(36).substring(2)}.webp`;
       const filePath = `${path}/${fileName}`;
-      const bucketName = 'project-images'; 
-      
+      const bucketName = 'project-images';
+
       const { error: uploadError } = await supabase.storage
         .from(bucketName)
         .upload(filePath, webpBlob, { contentType: 'image/webp' });
@@ -77,6 +103,7 @@ export const uploadImage = async (file: File, path: string): Promise<string | nu
     return uploadFile(file, path);
   } catch (error) {
     console.error('Erro no upload/compressão:', error);
+
     return null;
   }
 };
@@ -86,7 +113,7 @@ export const uploadFile = async (file: File, path: string): Promise<string | nul
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `${path}/${fileName}`;
-    const bucketName = 'project-images'; 
+    const bucketName = 'project-images';
 
     const { error: uploadError } = await supabase.storage
       .from(bucketName)

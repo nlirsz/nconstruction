@@ -11,6 +11,25 @@ import {
 import { BuildingVisualizer } from './BuildingVisualizer';
 import { DEFAULT_PHASES, getPhaseIcon, getPhaseColor } from '../constants';
 
+// Add CSS for hiding scrollbars but keeping functionality
+const scrollbarStyle = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+`;
+export const GlobalStyles = () => <style>{scrollbarStyle}</style>;
+
 interface UnitProgressProps {
     project: Project;
     currentUser?: any;
@@ -171,6 +190,7 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
 
     return (
         <div className="space-y-4 animate-in fade-in duration-500 pb-10 flex flex-col min-h-screen">
+            <GlobalStyles />
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0 px-1">
                 <div>
                     <h2 className="text-lg font-black text-slate-900 tracking-tight leading-none uppercase">Detalhamento Físico</h2>
@@ -509,6 +529,33 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
                                     );
                                 })}
                             </div>
+
+                            {/* MINI GALERIA DA UNIDADE */}
+                            {(selectedPhaseDetail.progressData.macroPhotos?.length > 0 || Object.values(selectedPhaseDetail.progressData.subtasks || {}).some((t: any) => typeof t === 'object' && t.photos?.length > 0)) && (
+                                <div className="mt-4 pt-4 border-t border-slate-100">
+                                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <ImageIcon size={14} className="text-blue-500" /> Fotos Registradas
+                                    </h4>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {(selectedPhaseDetail.progressData.macroPhotos || []).map((photo: any, idx: number) => (
+                                            <div key={`macro-${idx}`} className="aspect-square bg-slate-100 rounded-lg overflow-hidden relative group cursor-pointer" onClick={() => window.open(photo.url, '_blank')}>
+                                                <img src={photo.url} className="w-full h-full object-cover" loading="lazy" />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <Maximize2 size={12} className="text-white" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {Object.values(selectedPhaseDetail.progressData.subtasks || {}).flatMap((t: any) => (typeof t === 'object' && t.photos) ? t.photos : []).map((photo: any, idx: number) => (
+                                            <div key={`sub-${idx}`} className="aspect-square bg-slate-100 rounded-lg overflow-hidden relative group cursor-pointer" onClick={() => window.open(photo.url, '_blank')}>
+                                                <img src={photo.url} className="w-full h-full object-cover" loading="lazy" />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <Maximize2 size={12} className="text-white" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-3 bg-slate-50 border-t border-slate-100 flex flex-col gap-2">

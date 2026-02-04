@@ -185,16 +185,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                         <Briefcase size={16} />
                     </div>
                     <div>
-                        <h1 className="text-xs md:text-sm font-black text-slate-800 tracking-tight leading-none uppercase">Monitor de Produção</h1>
-                        <p className="text-[8px] md:text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Status operacional da obra</p>
+                        <h1 className="text-sm md:text-base font-black text-slate-800 tracking-tight leading-none uppercase">Monitor de Produção</h1>
+                        <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Status operacional da obra</p>
                     </div>
                 </div>
 
                 {weatherData && (
                     <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
                         <div className="text-right">
-                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Tempo</p>
-                            <p className="text-[8px] text-blue-600 font-black uppercase leading-none">{weatherData.insights[0].split('.')[0]}</p>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tempo</p>
+                            <p className="text-[10px] text-blue-600 font-black uppercase leading-none">{weatherData.insights[0].split('.')[0]}</p>
                         </div>
                         <div className="text-sm font-black text-slate-700 flex items-center gap-1">
                             {weatherData.current.temperature}° <Sun className="text-orange-400" size={14} />
@@ -206,7 +206,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 md:p-4">
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-50">
                     <ListOrdered size={12} className="text-blue-600" />
-                    <h3 className="font-black text-slate-700 text-[9px] uppercase tracking-widest">Frentes Ativas</h3>
+                    <h3 className="font-black text-slate-700 text-[10px] uppercase tracking-widest">Frentes Ativas</h3>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 md:gap-3">
@@ -230,12 +230,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                                         {getPhaseIcon(phase.icon, 10)}
                                     </div>
                                     <div className="flex flex-col items-end">
-                                        <span className="text-[7px] font-black text-slate-300 uppercase">{phase.code}</span>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase">{phase.code}</span>
                                         {hasBottleneck && <AlertTriangle size={10} className="text-red-500 mt-0.5 animate-pulse" />}
                                     </div>
                                 </div>
 
-                                <h4 className="font-black text-slate-800 text-[8px] uppercase tracking-tight mb-1 truncate leading-tight">
+                                <h4 className="font-black text-slate-800 text-[10px] uppercase tracking-tight mb-1 truncate leading-tight">
                                     {phase.label}
                                 </h4>
 
@@ -243,29 +243,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                                     {isComplete ? (
                                         <div className="flex items-center gap-1 text-emerald-600">
                                             <CheckCircle2 size={8} />
-                                            <span className="text-[7px] font-black uppercase">Fim</span>
+                                            <span className="text-[9px] font-black uppercase">Fim</span>
                                         </div>
                                     ) : isInProgress ? (
                                         <div className="space-y-0.5">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1 text-blue-600">
                                                     <Activity size={8} />
-                                                    <span className="text-[7px] font-black uppercase">Ativo</span>
+                                                    <span className="text-[9px] font-black uppercase">Ativo</span>
                                                 </div>
-                                                <span className="text-[8px] font-black text-blue-600">{completionPct}%</span>
+                                                <span className="text-[10px] font-black text-blue-600">{completionPct}%</span>
                                             </div>
-                                            <p className="text-[8px] font-bold text-slate-600 truncate leading-tight">
+                                            <p className="text-[10px] font-bold text-slate-600 truncate leading-tight">
                                                 {stats.activeFronts[0].label} ({stats.activeFronts[0].progress}%)
                                             </p>
                                         </div>
                                     ) : (
-                                        <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">Espera</span>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Espera</span>
                                     )}
                                 </div>
 
                                 <div className="mt-1.5 pt-1.5 border-t border-slate-50 flex items-center justify-between">
-                                    <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter">Progresso</span>
-                                    <span className="text-[7px] font-black text-slate-500">{stats.completedCount}/{stats.totalCount}</span>
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Progresso</span>
+                                    <span className="text-[9px] font-black text-slate-500">{stats.completedCount}/{stats.totalCount}</span>
                                 </div>
                             </div>
                         );
@@ -276,25 +276,83 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
             <div className="flex flex-col xl:flex-row gap-4">
                 <div className="flex-1 space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                        {/* AGENDA DO DIA (NEW) */}
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:col-span-2 ring-2 ring-emerald-400 ring-offset-1">
+                            <div className="flex items-center justify-between mb-2 px-1">
+                                <div className="flex items-center gap-2">
+                                    <Target size={14} className="text-emerald-500" />
+                                    <h3 className="font-black text-slate-700 text-[11px] uppercase tracking-widest">Agenda de Hoje ({new Date().toLocaleDateString('pt-BR')})</h3>
+                                </div>
+                                {activeTasks.length > 0 && <span className="text-[9px] font-black bg-emerald-500 text-white px-1.5 rounded-full">{activeTasks.length}</span>}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[160px] overflow-y-auto custom-scrollbar p-1">
+                                {activeTasks.length === 0 ?
+                                    <div className="col-span-1 md:col-span-2 py-4 flex flex-col items-center justify-center text-slate-400 gap-1 opacity-60">
+                                        <CheckCircle2 size={16} />
+                                        <p className="text-[10px] font-bold uppercase tracking-wide">Tudo em dia por hoje</p>
+                                    </div>
+                                    :
+                                    activeTasks.map(t => {
+                                        const level = project.structure?.levels?.find((l: any) => l.units.some((u: any) => u.id === t.linked_unit_id));
+                                        const unit = level?.units.find((u: any) => u.id === t.linked_unit_id);
+                                        const locationLabel = unit ? `${unit.name} • ${level.label}` : (level?.label || 'Geral');
+
+                                        return (
+                                            <div key={t.id} className="bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 flex justify-between items-center group cursor-pointer hover:bg-emerald-50 transition-colors" onClick={() => onNavigateToExecution?.(t.linked_unit_id)}>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${getPhaseColor(t.linked_phase_id ? activePhases.find(p => p.id === t.linked_phase_id)?.color : 'blue')}`} />
+                                                        <p className="text-[10px] font-black text-emerald-900 truncate leading-tight uppercase">{t.name}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-600/70 uppercase truncate">
+                                                        <span>{locationLabel}</span>
+                                                        <span>•</span>
+                                                        <span>Até {new Date(t.end).toLocaleDateString('pt-BR')}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 ml-2">
+                                                    <span className="text-[8px] font-black bg-white text-emerald-600 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                        {t.progress}%
+                                                    </span>
+                                                    <ArrowRight size={10} className="text-emerald-300 group-hover:translate-x-0.5 transition-transform" />
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                }
+                            </div>
+                        </div>
+
                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
                             <div className="flex items-center justify-between mb-2 px-1">
                                 <div className="flex items-center gap-2">
                                     <AlertTriangle size={12} className="text-red-500" />
-                                    <h3 className="font-black text-slate-500 text-[8px] uppercase tracking-widest">Atrasos (Gantt)</h3>
+                                    <h3 className="font-black text-slate-500 text-[10px] uppercase tracking-widest">Atrasos (Gantt)</h3>
                                 </div>
-                                {delayedTasks.length > 0 && <span className="text-[7px] font-black bg-red-500 text-white px-1.5 rounded-full">{delayedTasks.length}</span>}
+                                {delayedTasks.length > 0 && <span className="text-[9px] font-black bg-red-500 text-white px-1.5 rounded-full">{delayedTasks.length}</span>}
                             </div>
                             <div className="space-y-1.5 max-h-[100px] overflow-y-auto no-scrollbar">
-                                {delayedTasks.length === 0 ? <p className="text-[8px] text-slate-400 italic px-1 pt-2 text-center font-bold uppercase">Cronograma em dia</p> :
-                                    delayedTasks.map(t => (
-                                        <div key={t.id} className="bg-red-50 p-2 rounded-lg border border-red-100 flex justify-between items-center group cursor-pointer hover:bg-red-100">
-                                            <div className="min-w-0">
-                                                <p className="text-[8px] font-black text-red-700 truncate leading-tight uppercase">{t.name}</p>
-                                                <p className="text-[7px] font-bold text-red-500/70 mt-0.5">VENCEU EM {new Date(t.end).toLocaleDateString('pt-BR')}</p>
+                                {delayedTasks.length === 0 ? <p className="text-[10px] text-slate-400 italic px-1 pt-2 text-center font-bold uppercase">Cronograma em dia</p> :
+                                    delayedTasks.map(t => {
+                                        const level = project.structure?.levels?.find((l: any) => l.units.some((u: any) => u.id === t.linked_unit_id));
+                                        const unit = level?.units.find((u: any) => u.id === t.linked_unit_id);
+                                        const locationLabel = unit ? `${unit.name} • ${level.label}` : (level?.label || 'Geral');
+
+                                        return (
+                                            <div key={t.id} className="bg-red-50 p-2 rounded-lg border border-red-100 flex justify-between items-center group cursor-pointer hover:bg-red-100">
+                                                <div className="min-w-0">
+                                                    <p className="text-[10px] font-black text-red-700 truncate leading-tight uppercase">{t.name}</p>
+                                                    <div className="flex items-center gap-1 text-[8px] font-bold text-red-500/70 mt-0.5 uppercase">
+                                                        <span>{locationLabel}</span>
+                                                        <span>•</span>
+                                                        <span>VENCEU EM {new Date(t.end).toLocaleDateString('pt-BR')}</span>
+                                                    </div>
+                                                </div>
+                                                <ArrowRight size={10} className="text-red-300 group-hover:translate-x-0.5 transition-transform" />
                                             </div>
-                                            <ArrowRight size={10} className="text-red-300 group-hover:translate-x-0.5 transition-transform" />
-                                        </div>
-                                    ))
+                                        )
+                                    })
                                 }
                             </div>
                         </div>
@@ -303,21 +361,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                             <div className="flex items-center justify-between mb-2 px-1">
                                 <div className="flex items-center gap-2">
                                     <Clock size={12} className="text-blue-500" />
-                                    <h3 className="font-black text-slate-500 text-[8px] uppercase tracking-widest">Iniciar Logo</h3>
+                                    <h3 className="font-black text-slate-500 text-[10px] uppercase tracking-widest">Iniciar Logo</h3>
                                 </div>
-                                {upcomingTasks.length > 0 && <span className="text-[7px] font-black bg-blue-500 text-white px-1.5 rounded-full">{upcomingTasks.length}</span>}
+                                {upcomingTasks.length > 0 && <span className="text-[9px] font-black bg-blue-500 text-white px-1.5 rounded-full">{upcomingTasks.length}</span>}
                             </div>
                             <div className="space-y-1.5 max-h-[100px] overflow-y-auto no-scrollbar">
-                                {upcomingTasks.length === 0 ? <p className="text-[8px] text-slate-400 italic px-1 pt-2 text-center font-bold uppercase">Nenhum início próximo</p> :
-                                    upcomingTasks.map(t => (
-                                        <div key={t.id} className="bg-blue-50 p-2 rounded-lg border border-blue-100 flex justify-between items-center group cursor-pointer hover:bg-blue-100">
-                                            <div className="min-w-0">
-                                                <p className="text-[8px] font-black text-blue-700 truncate leading-tight uppercase">{t.name}</p>
-                                                <p className="text-[7px] font-bold text-blue-500/70 mt-0.5">INICIA EM {new Date(t.start).toLocaleDateString('pt-BR')}</p>
+                                {upcomingTasks.length === 0 ? <p className="text-[10px] text-slate-400 italic px-1 pt-2 text-center font-bold uppercase">Nenhum início próximo</p> :
+                                    upcomingTasks.map(t => {
+                                        const level = project.structure?.levels?.find((l: any) => l.units.some((u: any) => u.id === t.linked_unit_id));
+                                        const unit = level?.units.find((u: any) => u.id === t.linked_unit_id);
+                                        const locationLabel = unit ? `${unit.name} • ${level.label}` : (level?.label || 'Geral');
+
+                                        return (
+                                            <div key={t.id} className="bg-blue-50 p-2 rounded-lg border border-blue-100 flex justify-between items-center group cursor-pointer hover:bg-blue-100">
+                                                <div className="min-w-0">
+                                                    <p className="text-[10px] font-black text-blue-700 truncate leading-tight uppercase">{t.name}</p>
+                                                    <div className="flex items-center gap-1 text-[8px] font-bold text-blue-500/70 mt-0.5 uppercase">
+                                                        <span>{locationLabel}</span>
+                                                        <span>•</span>
+                                                        <span>INICIA EM {new Date(t.start).toLocaleDateString('pt-BR')}</span>
+                                                    </div>
+                                                </div>
+                                                <ArrowRight size={10} className="text-blue-300 group-hover:translate-x-0.5 transition-transform" />
                                             </div>
-                                            <ArrowRight size={10} className="text-blue-300 group-hover:translate-x-0.5 transition-transform" />
-                                        </div>
-                                    ))
+                                        )
+                                    })
                                 }
                             </div>
                         </div>
@@ -326,7 +394,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[240px]">
                         <div className="p-2.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
                             <History size={12} className="text-emerald-600" />
-                            <h3 className="font-black text-slate-700 text-[9px] uppercase tracking-widest">Atividade Recente</h3>
+                            <h3 className="font-black text-slate-700 text-[10px] uppercase tracking-widest">Atividade Recente</h3>
                         </div>
                         <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 custom-scrollbar">
                             {recentLogs.map((log) => (
@@ -335,8 +403,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                                         {log.user_avatar ? <img src={log.user_avatar} className="w-full h-full object-cover" /> : <User size={8} className="text-slate-400" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[7px] font-black text-slate-400 uppercase leading-none mb-1">{log.user_name?.split(' ')[0]} • {new Date(log.date).toLocaleDateString('pt-BR')}</p>
-                                        <p className="text-[9px] font-bold text-slate-800 leading-tight truncate uppercase">{log.title}</p>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">{log.user_name?.split(' ')[0]} • {new Date(log.date).toLocaleDateString('pt-BR')}</p>
+                                        <p className="text-[10px] font-bold text-slate-800 leading-tight truncate uppercase">{log.title}</p>
                                     </div>
                                 </div>
                             ))
@@ -347,7 +415,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
 
                 <div className="space-y-4">
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
-                        <h3 className="font-black text-slate-700 text-[8px] uppercase tracking-widest mb-3 flex items-center gap-2 px-1">
+                        <h3 className="font-black text-slate-700 text-[10px] uppercase tracking-widest mb-3 flex items-center gap-2 px-1">
                             <HardHat size={12} className="text-blue-600" /> Resumo de Etapas
                         </h3>
                         <div className="space-y-2.5">
@@ -361,9 +429,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                                         <div className="flex justify-between items-center mb-1">
                                             <div className="flex items-center gap-1.5">
                                                 <div className={`p-1 rounded text-white ${getPhaseColor(phase.color)}`}>{getPhaseIcon(phase.icon, 8)}</div>
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">{phase.label}</span>
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{phase.label}</span>
                                             </div>
-                                            <span className="text-[8px] font-black text-blue-600">{pct}%</span>
+                                            <span className="text-[10px] font-black text-blue-600">{pct}%</span>
                                         </div>
                                         <div className="w-full h-1 bg-slate-50 rounded-full overflow-hidden">
                                             <div className={`h-full transition-all duration-700 ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }}></div>
@@ -378,15 +446,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                         <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                                 <Package size={12} className="text-blue-400" />
-                                <h3 className="font-black text-white text-[8px] uppercase tracking-widest">Logística</h3>
+                                <h3 className="font-black text-white text-[10px] uppercase tracking-widest">Logística</h3>
                             </div>
                         </div>
                         <div className="space-y-1.5">
                             {recentSupplies.slice(0, 2).map(s => (
                                 <div key={s.id} className="p-1.5 rounded bg-white/5 border border-white/5">
                                     <div className="flex justify-between items-start gap-2">
-                                        <p className="text-[8px] font-bold text-white truncate flex-1 uppercase tracking-tight">{s.title}</p>
-                                        <span className={`text-[6px] font-black uppercase px-1 rounded ${s.status === 'delivered' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                        <p className="text-[10px] font-bold text-white truncate flex-1 uppercase tracking-tight">{s.title}</p>
+                                        <span className={`text-[9px] font-black uppercase px-1 rounded ${s.status === 'delivered' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-orange-500/20 text-orange-400'}`}>
                                             {s.status === 'delivered' ? 'Ok' : 'Em curso'}
                                         </span>
                                     </div>
