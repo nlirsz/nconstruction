@@ -1,89 +1,63 @@
-# Deploy Automático via Cloud Build (SEM Service Account)
+# Deploy Automático - Cloud Build
 
-## 🎯 Solução Simplificada
+## ✅ ID do Projeto Correto: `gen-lang-client-0749771787`
 
-Como você tem papel de **Editor** (não Owner), vamos usar Cloud Build diretamente conectado ao GitHub.
+## � Configuração (Execute no Cloud Shell)
 
-## 📋 Passo a Passo (5 minutos)
-
-### 1. Habilitar APIs Necessárias
-
-Acesse o Cloud Shell (https://console.cloud.google.com) e execute:
+### 1. Configurar Projeto
 
 ```bash
-gcloud services enable cloudbuild.googleapis.com \
-  run.googleapis.com \
-  containerregistry.googleapis.com \
-  --project=nconstruction-449220
+gcloud config set project gen-lang-client-0749771787
 ```
 
-### 2. Dar Permissões ao Cloud Build
+### 2. Habilitar APIs
 
 ```bash
-# Obter o número do projeto
-PROJECT_NUMBER=$(gcloud projects describe nconstruction-449220 --format='value(projectNumber)')
+gcloud services enable cloudbuild.googleapis.com run.googleapis.com containerregistry.googleapis.com
+```
 
-# Adicionar permissão de Cloud Run Admin
-gcloud projects add-iam-policy-binding nconstruction-449220 \
+### 3. Dar Permissões ao Cloud Build
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe gen-lang-client-0749771787 --format='value(projectNumber)')
+
+gcloud projects add-iam-policy-binding gen-lang-client-0749771787 \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/run.admin"
 
-# Adicionar permissão de Service Account User
-gcloud projects add-iam-policy-binding nconstruction-449220 \
+gcloud projects add-iam-policy-binding gen-lang-client-0749771787 \
   --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
 ```
 
-### 3. Conectar GitHub ao Cloud Build
+### 4. Conectar GitHub ao Cloud Build
 
-1. Acesse: https://console.cloud.google.com/cloud-build/triggers?project=nconstruction-449220
-2. Clique em **"Connect Repository"** (Conectar repositório)
-3. Selecione **GitHub**
-4. Autentique com sua conta GitHub
-5. Selecione o repositório: **nlirsz/nconstruction**
-6. Clique em **"Connect"**
+1. Acesse: https://console.cloud.google.com/cloud-build/triggers?project=gen-lang-client-0749771787
+2. Clique em **"Connect Repository"**
+3. Selecione **GitHub** → Autentique
+4. Escolha: **nlirsz/nconstruction**
+5. Clique em **"Connect"**
 
-### 4. Criar Trigger de Deploy
-
-Ainda na página de Triggers:
+### 5. Criar Trigger de Deploy
 
 1. Clique em **"Create Trigger"**
 2. Preencha:
    - **Name**: `deploy-to-cloud-run`
    - **Event**: Push to a branch
-   - **Source**: `^main$` (branch main)
-   - **Configuration**: Cloud Build configuration file (yaml or json)
-   - **Location**: Repository
-   - **Cloud Build configuration file**: `cloudbuild.yaml`
-3. Clique em **"Create"**
+   - **Branch**: `^main$`
+   - **Configuration**: Cloud Build configuration file
+   - **Location**: `cloudbuild.yaml`
+3. **Create**
 
-## ✅ Pronto!
-
-Agora, sempre que você fizer push na branch `main`, o Cloud Build automaticamente:
-1. Builda a imagem Docker
-2. Faz push para o Container Registry
-3. Faz deploy no Cloud Run
-
-## 🔍 Acompanhar Deploys
-
-- Acesse: https://console.cloud.google.com/cloud-build/builds?project=nconstruction-449220
-- Veja logs em tempo real
-- URL do app aparece no final do deploy
-
-## 🌐 URL do App
-
-Após o primeiro deploy bem-sucedido, acesse:
-https://console.cloud.google.com/run?project=nconstruction-449220
-
-A URL pública estará lá (algo como `https://nconstruction-app-xxxxx-uc.a.run.app`)
-
-## 🚀 Testar Agora
-
-Faça um push qualquer para testar:
+## 🚀 Testar Deploy
 
 ```bash
 git commit --allow-empty -m "test: Trigger deploy"
 git push origin main
 ```
 
-Acompanhe em: https://console.cloud.google.com/cloud-build/builds?project=nconstruction-449220
+Acompanhe em: https://console.cloud.google.com/cloud-build/builds?project=gen-lang-client-0749771787
+
+## 🌐 Ver App Depois do Deploy
+
+https://console.cloud.google.com/run?project=gen-lang-client-0749771787

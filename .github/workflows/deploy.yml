@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  PROJECT_ID: nconstruction-449220
+  PROJECT_ID: gen-lang-client-0749771787
   SERVICE_NAME: nconstruction-app
   REGION: us-central1
 
