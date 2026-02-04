@@ -1,79 +1,89 @@
-# Configuração de Deploy Automático - Google Cloud Run
+# Deploy Automático via Cloud Build (SEM Service Account)
 
-Este projeto está configurado para fazer deploy automático no Google Cloud Run sempre que você fizer push na branch `main`.
+## 🎯 Solução Simplificada
 
-## 🔧 Configuração Necessária (Uma Vez Apenas)
+Como você tem papel de **Editor** (não Owner), vamos usar Cloud Build diretamente conectado ao GitHub.
 
-### 1. Criar Service Account no Google Cloud
+## 📋 Passo a Passo (5 minutos)
 
-Execute estes comandos no terminal (ou no Cloud Shell):
+### 1. Habilitar APIs Necessárias
+
+Acesse o Cloud Shell (https://console.cloud.google.com) e execute:
 
 ```bash
-# 1. Criar service account
-gcloud iam service-accounts create github-actions \
-  --display-name="GitHub Actions Deploy" \
+gcloud services enable cloudbuild.googleapis.com \
+  run.googleapis.com \
+  containerregistry.googleapis.com \
   --project=nconstruction-449220
+```
 
-# 2. Adicionar permissões necessárias
+### 2. Dar Permissões ao Cloud Build
+
+```bash
+# Obter o número do projeto
+PROJECT_NUMBER=$(gcloud projects describe nconstruction-449220 --format='value(projectNumber)')
+
+# Adicionar permissão de Cloud Run Admin
 gcloud projects add-iam-policy-binding nconstruction-449220 \
-  --member="serviceAccount:github-actions@nconstruction-449220.iam.gserviceaccount.com" \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/run.admin"
 
+# Adicionar permissão de Service Account User
 gcloud projects add-iam-policy-binding nconstruction-449220 \
-  --member="serviceAccount:github-actions@nconstruction-449220.iam.gserviceaccount.com" \
-  --role="roles/storage.admin"
-
-gcloud projects add-iam-policy-binding nconstruction-449220 \
-  --member="serviceAccount:github-actions@nconstruction-449220.iam.gserviceaccount.com" \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
-
-# 3. Criar e baixar a chave JSON
-gcloud iam service-accounts keys create github-actions-key.json \
-  --iam-account=github-actions@nconstruction-449220.iam.gserviceaccount.com
 ```
 
-### 2. Adicionar Secret no GitHub
+### 3. Conectar GitHub ao Cloud Build
 
-1. Acesse: https://github.com/nlirsz/nconstruction/settings/secrets/actions
-2. Clique em "New repository secret"
-3. Nome: `GCP_SA_KEY`
-4. Valor: Cole o conteúdo completo do arquivo `github-actions-key.json`
-5. Clique em "Add secret"
+1. Acesse: https://console.cloud.google.com/cloud-build/triggers?project=nconstruction-449220
+2. Clique em **"Connect Repository"** (Conectar repositório)
+3. Selecione **GitHub**
+4. Autentique com sua conta GitHub
+5. Selecione o repositório: **nlirsz/nconstruction**
+6. Clique em **"Connect"**
 
-### 3. Habilitar APIs no Google Cloud
+### 4. Criar Trigger de Deploy
 
-```bash
-gcloud services enable run.googleapis.com \
-  containerregistry.googleapis.com \
-  cloudbuild.googleapis.com \
-  --project=nconstruction-449220
-```
+Ainda na página de Triggers:
 
-## 🚀 Como Usar
+1. Clique em **"Create Trigger"**
+2. Preencha:
+   - **Name**: `deploy-to-cloud-run`
+   - **Event**: Push to a branch
+   - **Source**: `^main$` (branch main)
+   - **Configuration**: Cloud Build configuration file (yaml or json)
+   - **Location**: Repository
+   - **Cloud Build configuration file**: `cloudbuild.yaml`
+3. Clique em **"Create"**
 
-Após a configuração inicial, o deploy é automático:
+## ✅ Pronto!
 
-1. Faça suas alterações no código
-2. Commit: `git commit -m "sua mensagem"`
-3. Push: `git push origin main`
-4. ✅ O GitHub Actions fará o deploy automaticamente!
+Agora, sempre que você fizer push na branch `main`, o Cloud Build automaticamente:
+1. Builda a imagem Docker
+2. Faz push para o Container Registry
+3. Faz deploy no Cloud Run
 
-## 📊 Acompanhar Deploy
+## 🔍 Acompanhar Deploys
 
-- Acesse: https://github.com/nlirsz/nconstruction/actions
-- Veja o progresso em tempo real
-- A URL do app será exibida no final do deploy
+- Acesse: https://console.cloud.google.com/cloud-build/builds?project=nconstruction-449220
+- Veja logs em tempo real
+- URL do app aparece no final do deploy
 
 ## 🌐 URL do App
 
-Após o primeiro deploy, seu app estará disponível em:
-`https://nconstruction-app-[hash].us-central1.run.app`
+Após o primeiro deploy bem-sucedido, acesse:
+https://console.cloud.google.com/run?project=nconstruction-449220
 
-A URL exata será exibida no log do GitHub Actions.
+A URL pública estará lá (algo como `https://nconstruction-app-xxxxx-uc.a.run.app`)
 
-## 💡 Dicas
+## 🚀 Testar Agora
 
-- O deploy leva ~3-5 minutos
-- Erros aparecem na aba "Actions" do GitHub
-- Você pode fazer rollback para versões anteriores pelo Cloud Console
-- O app escala automaticamente de 0 a 3 instâncias conforme demanda
+Faça um push qualquer para testar:
+
+```bash
+git commit --allow-empty -m "test: Trigger deploy"
+git push origin main
+```
+
+Acompanhe em: https://console.cloud.google.com/cloud-build/builds?project=nconstruction-449220
