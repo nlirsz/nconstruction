@@ -141,8 +141,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   onClick={() => handleItemClick(item.id)}
                   className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-all duration-200 group relative ${activeTab === item.id
-                      ? 'bg-white shadow-lg shadow-black/20 text-blue-600 xl:text-white xl:bg-white/15'
-                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                    ? 'bg-white shadow-lg shadow-black/20 text-blue-600 xl:text-white xl:bg-white/15'
+                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
                     }`}
                 >
                   <div className={`${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform`}>
@@ -157,6 +157,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </ul>
         </nav>
+
+        <div className="px-2 pb-2 border-t border-white/10">
+          <button
+            onClick={() => handleItemClick('settings')}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold transition-all duration-200 group relative ${activeTab === 'settings'
+              ? 'bg-white shadow-lg shadow-black/20 text-blue-600 xl:text-white xl:bg-white/15'
+              : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+          >
+            <div className={`${activeTab === 'settings' ? 'scale-110' : 'group-hover:scale-110'} transition-transform`}>
+              <Settings size={18} />
+            </div>
+            {!isCollapsed && <span className="uppercase tracking-tight truncate">Configurações</span>}
+            {activeTab === 'settings' && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-1/2 bg-white rounded-r-full shadow-[0_0_8px_white] xl:hidden" />
+            )}
+          </button>
+        </div>
 
         <div className="p-3 border-t border-white/10 bg-black/10">
           <button
