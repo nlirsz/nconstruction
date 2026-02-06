@@ -304,7 +304,8 @@ const App: React.FC = () => {
       image_url: updatedTask.imageUrl,
       linked_unit_id: updatedTask.linked_unit_id || null, // Convert empty string to null for UUID
       linked_phase_id: updatedTask.linked_phase_id || null,
-      linked_subtasks: updatedTask.linked_subtasks || null
+      linked_subtasks: updatedTask.linked_subtasks || null,
+      updated_at: new Date().toISOString()
     }).eq('id', updatedTask.id);
 
     if (error) {
@@ -331,14 +332,70 @@ const App: React.FC = () => {
         await cascadeShift(updatedTask.id, shiftInDays);
       }
 
+      // Sincronização BIDIRECIONAL: Cronograma → Execução
       if (updatedTask.linked_unit_id && updatedTask.linked_phase_id) {
-        await supabase.from('unit_progress').upsert({
-          project_id: updatedTask.projectId,
-          unit_id: updatedTask.linked_unit_id,
-          phase_id: updatedTask.linked_phase_id,
-          percentage: updatedTask.progress,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'unit_id, phase_id' });
+        // Busca o progresso atual da unidade para preservar outras subtarefas
+        const { data: existingProgress } = await supabase
+          .from('unit_progress')
+          .select('subtasks, percentage')
+          .eq('unit_id', updatedTask.linked_unit_id)
+          .eq('phase_id', updatedTask.linked_phase_id)
+          .single();
+
+        let updatedSubtasks = existingProgress?.subtasks || {};
+
+        // Se a tarefa tem subtarefas específicas vinculadas, atualiza apenas elas
+        if (updatedTask.linked_subtasks && updatedTask.linked_subtasks.length > 0) {
+          updatedTask.linked_subtasks.forEach((subtaskName: string) => {
+            const currentSubtask = updatedSubtasks[subtaskName] || {};
+            updatedSubtasks[subtaskName] = {
+              ...(typeof currentSubtask === 'object' ? currentSubtask : { progress: currentSubtask }),
+              progress: updatedTask.progress
+            };
+          });
+
+          // Recalcula a porcentagem geral da fase baseado em TODAS as subtarefas
+          // Busca as fases do projeto para saber quais subtarefas existem
+          const { data: projectData } = await supabase
+            .from('projects')
+            .select('phases')
+            .eq('id', updatedTask.projectId)
+            .single();
+
+          const phases = projectData?.phases || [];
+          const currentPhase = phases.find((p: any) => p.id === updatedTask.linked_phase_id);
+          const allSubtaskNames = currentPhase?.subtasks || [];
+
+          let sum = 0;
+          let count = 0;
+          allSubtaskNames.forEach((name: string) => {
+            const subtask = updatedSubtasks[name];
+            const progress = typeof subtask === 'object' ? subtask.progress : subtask;
+            sum += progress || 0;
+            count++;
+          });
+
+          const newPercentage = count > 0 ? Math.round(sum / count) : updatedTask.progress;
+
+          await supabase.from('unit_progress').upsert({
+            project_id: updatedTask.projectId,
+            unit_id: updatedTask.linked_unit_id,
+            phase_id: updatedTask.linked_phase_id,
+            percentage: newPercentage,
+            subtasks: updatedSubtasks,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'unit_id, phase_id' });
+        } else {
+          // Se não tem subtarefas específicas, atualiza a porcentagem geral da fase
+          await supabase.from('unit_progress').upsert({
+            project_id: updatedTask.projectId,
+            unit_id: updatedTask.linked_unit_id,
+            phase_id: updatedTask.linked_phase_id,
+            percentage: updatedTask.progress,
+            subtasks: updatedSubtasks,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'unit_id, phase_id' });
+        }
       }
       fetchTasks(updatedTask.projectId);
     }

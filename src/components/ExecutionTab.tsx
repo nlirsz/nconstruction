@@ -202,24 +202,55 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
         try {
             const unit = data[selectedUnit.fIdx].units[selectedUnit.uIdx];
             const currentPhaseState = unit.phases[activePhaseId] || { percentage: 0, subtasks: {} };
-            await supabase.from('unit_progress').upsert({ unit_id: unit.id, project_id: project.id, phase_id: activePhaseId, percentage: currentPhaseState.percentage, subtasks: currentPhaseState.subtasks, updated_at: new Date().toISOString() }, { onConflict: 'unit_id, phase_id' });
 
-            // Sincronização: Atualiza tarefa correspondente no cronograma (Gantt)
+            // 1. Salva o progresso da unidade
+            await supabase.from('unit_progress').upsert({
+                unit_id: unit.id,
+                project_id: project.id,
+                phase_id: activePhaseId,
+                percentage: currentPhaseState.percentage,
+                subtasks: currentPhaseState.subtasks,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'unit_id, phase_id' });
+
+            // 2. Sincronização BIDIRECIONAL: Atualiza tarefa correspondente no cronograma (Gantt)
             const { data: tasksToUpdate } = await supabase
                 .from('tasks')
-                .select('id')
+                .select('id, linked_subtasks')
                 .eq('project_id', project.id)
                 .eq('linked_unit_id', unit.id)
                 .eq('linked_phase_id', activePhaseId);
 
             if (tasksToUpdate && tasksToUpdate.length > 0) {
-                const status = currentPhaseState.percentage === 100 ? TaskStatus.COMPLETED :
-                    currentPhaseState.percentage > 0 ? TaskStatus.IN_PROGRESS : TaskStatus.NOT_STARTED;
+                // Calcula o progresso baseado nas subtarefas vinculadas à tarefa
+                const currentPhaseConfig = projectPhases.find(p => p.id === activePhaseId);
+                const allSubtasks = currentPhaseConfig?.subtasks || [];
 
                 for (const t of tasksToUpdate) {
+                    let taskProgress = currentPhaseState.percentage; // Default: usa a porcentagem geral da fase
+
+                    // Se a tarefa tem subtarefas específicas vinculadas, calcula baseado nelas
+                    if (t.linked_subtasks && t.linked_subtasks.length > 0) {
+                        let sum = 0;
+                        let count = 0;
+                        t.linked_subtasks.forEach((subtaskName: string) => {
+                            const subtaskData = currentPhaseState.subtasks?.[subtaskName];
+                            if (subtaskData) {
+                                const progress = typeof subtaskData === 'object' ? subtaskData.progress : subtaskData;
+                                sum += progress || 0;
+                                count++;
+                            }
+                        });
+                        taskProgress = count > 0 ? Math.round(sum / count) : 0;
+                    }
+
+                    const status = taskProgress === 100 ? TaskStatus.COMPLETED :
+                        taskProgress > 0 ? TaskStatus.IN_PROGRESS : TaskStatus.NOT_STARTED;
+
                     await supabase.from('tasks').update({
-                        progress: currentPhaseState.percentage,
-                        status: status
+                        progress: taskProgress,
+                        status: status,
+                        updated_at: new Date().toISOString()
                     }).eq('id', t.id);
                 }
             }
@@ -228,7 +259,12 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
             await supabase.from('projects').update({ progress: globalProgress }).eq('id', project.id);
             onUpdateProgress(globalProgress);
             setActivePhaseId(null);
-        } catch (err: any) { alert("Erro ao salvar"); } finally { setSaving(false); }
+        } catch (err: any) {
+            console.error("Erro ao salvar:", err);
+            alert("Erro ao salvar");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const calculateGlobalProgress = (matrixData: any[]) => {
