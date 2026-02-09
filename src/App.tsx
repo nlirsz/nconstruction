@@ -111,6 +111,9 @@ const App: React.FC = () => {
     if (selectedProject) {
       // fetchPhotos(); // fetchPhotos is not defined in the provided code, so commenting out to avoid errors.
       fetchTasks(selectedProject.id);
+    } else if (session) {
+      // Quando voltar para a tela inicial (selectedProject === null), recarrega os projetos
+      fetchProjects();
     }
   }, [selectedProject?.id]);
 

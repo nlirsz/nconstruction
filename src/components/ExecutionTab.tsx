@@ -249,15 +249,32 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
 
                     await supabase.from('tasks').update({
                         progress: taskProgress,
-                        status: status,
-                        updated_at: new Date().toISOString()
+                        status: status
                     }).eq('id', t.id);
                 }
             }
 
-            const globalProgress = calculateGlobalProgress(data);
+
+            // Atualiza o progresso global do projeto
+            // Busca os dados atualizados e calcula baseado na estrutura real do projeto
+            const { data: updatedProgressData } = await supabase
+                .from('unit_progress')
+                .select('unit_id, phase_id, percentage')
+                .eq('project_id', project.id);
+
+            // Calcula baseado na estrutura do projeto
+            let totalP = 0;
+            let count = 0;
+
+            updatedProgressData?.forEach(progress => {
+                totalP += progress.percentage || 0;
+                count++;
+            });
+
+            const globalProgress = count > 0 ? Math.round(totalP / count) : 0;
             await supabase.from('projects').update({ progress: globalProgress }).eq('id', project.id);
             onUpdateProgress(globalProgress);
+
             setActivePhaseId(null);
         } catch (err: any) {
             console.error("Erro ao salvar:", err);
@@ -543,26 +560,154 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
         if (!massUpdateData.phaseId || massSelectedUnits.length === 0) return;
         setSaving(true);
         try {
+            // Busca a configuração da fase para saber quais subtarefas existem
+            const currentPhaseConfig = projectPhases.find(p => p.id === massUpdateData.phaseId);
+            const allSubtaskNames = currentPhaseConfig?.subtasks || [];
+
             const updates = massSelectedUnits.map(async (unitId) => {
-                const subtasksObj: any = {};
+                // Busca o progresso existente da unidade para preservar outras subtarefas
+                const { data: existingProgressArray, error } = await supabase
+                    .from('unit_progress')
+                    .select('subtasks')
+                    .eq('unit_id', unitId)
+                    .eq('phase_id', massUpdateData.phaseId);
+
+                // Pega o primeiro resultado ou usa objeto vazio se não existir
+                const existingProgress = existingProgressArray && existingProgressArray.length > 0
+                    ? existingProgressArray[0]
+                    : null;
+
+                let updatedSubtasks = existingProgress?.subtasks || {};
+
+                // Se subtarefas específicas foram selecionadas, atualiza apenas elas
                 if (massUpdateData.subtasks.length > 0) {
                     massUpdateData.subtasks.forEach(st => {
-                        subtasksObj[st] = { progress: massUpdateData.progress };
+                        const currentSubtask = updatedSubtasks[st] || {};
+                        updatedSubtasks[st] = {
+                            ...(typeof currentSubtask === 'object' ? currentSubtask : { progress: currentSubtask }),
+                            progress: massUpdateData.progress
+                        };
+                    });
+                } else {
+                    // Se nenhuma subtarefa foi selecionada, atualiza TODAS as subtarefas da fase
+                    allSubtaskNames.forEach((name: string) => {
+                        const currentSubtask = updatedSubtasks[name] || {};
+                        updatedSubtasks[name] = {
+                            ...(typeof currentSubtask === 'object' ? currentSubtask : { progress: currentSubtask }),
+                            progress: massUpdateData.progress
+                        };
                     });
                 }
+
+                // Recalcula a porcentagem geral da fase baseado em TODAS as subtarefas
+                let sum = 0;
+                let count = 0;
+                allSubtaskNames.forEach((name: string) => {
+                    const subtask = updatedSubtasks[name];
+                    const progress = typeof subtask === 'object' ? subtask.progress : subtask;
+                    sum += progress || 0;
+                    count++;
+                });
+
+                const newPercentage = count > 0 ? Math.round(sum / count) : massUpdateData.progress;
 
                 return supabase.from('unit_progress').upsert({
                     project_id: project.id,
                     unit_id: unitId,
                     phase_id: massUpdateData.phaseId,
-                    percentage: massUpdateData.progress,
-                    subtasks: subtasksObj,
+                    percentage: newPercentage,
+                    subtasks: updatedSubtasks,
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'project_id,unit_id,phase_id' });
+                }, { onConflict: 'unit_id, phase_id' });
             });
+
 
             await Promise.all(updates);
             await loadData();
+
+            // Sincroniza com as tarefas do Gantt (Cronograma)
+            // Para cada unidade atualizada, busca e atualiza as tarefas vinculadas
+            for (const unitId of massSelectedUnits) {
+                const { data: tasksToUpdate } = await supabase
+                    .from('tasks')
+                    .select('id, linked_subtasks')
+                    .eq('project_id', project.id)
+                    .eq('linked_unit_id', unitId)
+                    .eq('linked_phase_id', massUpdateData.phaseId);
+
+                if (tasksToUpdate && tasksToUpdate.length > 0) {
+                    const currentPhaseConfig = projectPhases.find(p => p.id === massUpdateData.phaseId);
+                    const allSubtaskNames = currentPhaseConfig?.subtasks || [];
+
+                    for (const t of tasksToUpdate) {
+                        // Busca o progresso atualizado da unidade
+                        const { data: progressData } = await supabase
+                            .from('unit_progress')
+                            .select('subtasks, percentage')
+                            .eq('unit_id', unitId)
+                            .eq('phase_id', massUpdateData.phaseId)
+                            .single();
+
+                        let taskProgress = progressData?.percentage || 0;
+
+                        // Se a tarefa tem subtarefas específicas vinculadas, calcula baseado nelas
+                        if (t.linked_subtasks && t.linked_subtasks.length > 0 && progressData?.subtasks) {
+                            let sum = 0;
+                            let count = 0;
+                            t.linked_subtasks.forEach((subtaskName: string) => {
+                                const subtaskData = progressData.subtasks[subtaskName];
+                                if (subtaskData) {
+                                    const progress = typeof subtaskData === 'object' ? subtaskData.progress : subtaskData;
+                                    sum += progress || 0;
+                                    count++;
+                                }
+                            });
+                            taskProgress = count > 0 ? Math.round(sum / count) : taskProgress;
+                        }
+
+                        const status = taskProgress === 100 ? TaskStatus.COMPLETED :
+                            taskProgress > 0 ? TaskStatus.IN_PROGRESS : TaskStatus.NOT_STARTED;
+
+                        await supabase.from('tasks').update({
+                            progress: taskProgress,
+                            status: status
+                        }).eq('id', t.id);
+                    }
+                }
+            }
+
+            // Recarrega os dados atualizados
+            await loadData();
+
+            // Atualiza o progresso global do projeto
+            // Busca os dados atualizados e calcula baseado na estrutura real do projeto
+            const { data: updatedProgressData } = await supabase
+                .from('unit_progress')
+                .select('unit_id, phase_id, percentage')
+                .eq('project_id', project.id);
+
+            // Calcula baseado na estrutura do projeto (floors -> units -> phases)
+            let totalP = 0;
+            let count = 0;
+
+            // Percorre a estrutura do projeto para calcular corretamente
+            const structure = project.structure;
+            if (structure && structure.floors && structure.unitsPerFloor) {
+                const totalUnits = structure.floors * structure.unitsPerFloor;
+                const totalPhases = projectPhases.length;
+
+                // Para cada combinação unidade/fase, busca o progresso
+                updatedProgressData?.forEach(progress => {
+                    totalP += progress.percentage || 0;
+                    count++;
+                });
+
+                // Se não há dados suficientes, usa 0
+                const globalProgress = count > 0 ? Math.round(totalP / count) : 0;
+                await supabase.from('projects').update({ progress: globalProgress }).eq('id', project.id);
+                onUpdateProgress(globalProgress);
+            }
+
             setIsMassUpdateOpen(false);
             setMassSelectedUnits([]);
             setMassUpdateData({ phaseId: '', progress: 0, subtasks: [] });
