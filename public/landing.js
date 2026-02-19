@@ -1,15 +1,42 @@
-// Mobile Menu Toggle
-const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-const navLinks = document.querySelector('.nav-links');
+// ===== Scroll Reveal Animation =====
+const revealElements = document.querySelectorAll('[data-reveal]');
 
-if (mobileMenuBtn) {
-    mobileMenuBtn.addEventListener('click', () => {
-        navLinks.classList.toggle('active');
-        mobileMenuBtn.classList.toggle('active');
+const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const delay = entry.target.dataset.delay || 0;
+            setTimeout(() => {
+                entry.target.classList.add('revealed');
+            }, parseInt(delay));
+            revealObserver.unobserve(entry.target);
+        }
     });
-}
+}, {
+    threshold: 0.15,
+    rootMargin: '0px 0px -60px 0px'
+});
 
-// Smooth Scroll
+revealElements.forEach(el => revealObserver.observe(el));
+
+// ===== Navbar Scroll Effect =====
+const nav = document.getElementById('mainNav');
+let ticking = false;
+
+window.addEventListener('scroll', () => {
+    if (!ticking) {
+        requestAnimationFrame(() => {
+            if (window.scrollY > 40) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+            ticking = false;
+        });
+        ticking = true;
+    }
+});
+
+// ===== Smooth Scroll =====
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -23,107 +50,69 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
-// Navbar Scroll Effect
-let lastScroll = 0;
-const nav = document.querySelector('.nav');
+// ===== Counter Animation =====
+function animateCounter(el, target) {
+    const suffix = el.textContent.includes('%') ? '%' : '';
+    const duration = 1800;
+    const start = performance.now();
 
-window.addEventListener('scroll', () => {
-    const currentScroll = window.pageYOffset;
+    function update(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        // Ease out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = Math.floor(eased * target);
+        el.textContent = current + suffix;
 
-    if (currentScroll > 100) {
-        nav.style.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1)';
-    } else {
-        nav.style.boxShadow = 'none';
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        } else {
+            el.textContent = target + suffix;
+        }
     }
 
-    lastScroll = currentScroll;
-});
+    requestAnimationFrame(update);
+}
 
-// Intersection Observer for Animations
-const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -100px 0px'
-};
-
-const observer = new IntersectionObserver((entries) => {
+const counterObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
-        }
-    });
-}, observerOptions);
-
-// Observe feature cards and benefit items
-document.querySelectorAll('.feature-card, .benefit-item, .stat-box').forEach(el => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(20px)';
-    el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-    observer.observe(el);
-});
-
-// Stats Counter Animation
-function animateCounter(element, target, duration = 2000) {
-    const start = 0;
-    const increment = target / (duration / 16);
-    let current = start;
-
-    const timer = setInterval(() => {
-        current += increment;
-        if (current >= target) {
-            element.textContent = target + (element.dataset.suffix || '');
-            clearInterval(timer);
-        } else {
-            element.textContent = Math.floor(current) + (element.dataset.suffix || '');
-        }
-    }, 16);
-}
-
-// Trigger counter animation when stats section is visible
-const statsObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting && !entry.target.classList.contains('counted')) {
-            entry.target.classList.add('counted');
-            const statNumbers = entry.target.querySelectorAll('.stat-number, .stat-value');
-            statNumbers.forEach(stat => {
-                const value = parseInt(stat.textContent);
-                if (!isNaN(value)) {
-                    stat.dataset.suffix = stat.textContent.replace(/[0-9]/g, '');
-                    animateCounter(stat, value);
+            const counters = entry.target.querySelectorAll('[data-counter]');
+            counters.forEach(counter => {
+                const target = parseInt(counter.dataset.counter);
+                if (!isNaN(target)) {
+                    animateCounter(counter, target);
                 }
             });
+            counterObserver.unobserve(entry.target);
         }
     });
-}, { threshold: 0.5 });
+}, { threshold: 0.3 });
 
-document.querySelectorAll('.hero-stats, .stats-grid').forEach(el => {
-    statsObserver.observe(el);
+// Observe metric elements and hero UI card
+document.querySelectorAll('.metrics-grid, .hero-ui-card').forEach(el => {
+    counterObserver.observe(el);
 });
 
-// Form Validation (if you add forms later)
-function validateEmail(email) {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-}
-
-// Lazy load images
-if ('IntersectionObserver' in window) {
-    const imageObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const img = entry.target;
-                if (img.dataset.src) {
-                    img.src = img.dataset.src;
-                    img.removeAttribute('data-src');
-                }
-                imageObserver.unobserve(img);
-            }
-        });
+// ===== Progress Bar Animation =====
+const progressObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const fills = entry.target.querySelectorAll('.ui-progress-fill, .mock-bar-fill');
+            fills.forEach(fill => {
+                const width = fill.style.width;
+                fill.style.width = '0%';
+                setTimeout(() => {
+                    fill.style.width = width;
+                }, 400);
+            });
+            progressObserver.unobserve(entry.target);
+        }
     });
+}, { threshold: 0.2 });
 
-    document.querySelectorAll('img[data-src]').forEach(img => {
-        imageObserver.observe(img);
-    });
-}
+document.querySelectorAll('.hero-ui-card, .app-mockup, .showcase-card').forEach(el => {
+    progressObserver.observe(el);
+});
 
-console.log('🚀 nConstruction Landing Page loaded successfully!');
+console.log('🚀 nConstruction Landing loaded');
