@@ -1,38 +1,59 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://zozohlwhjqxittkpgikv.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpvem9obHdoanF4aXR0a3BnaWt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3MzM3MzAsImV4cCI6MjA3OTMwOTczMH0.4yUK3w6R-fCDBOzFFf55naEkZoA6_clcmT96PLqleEY';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase environment variables. ' +
+    'Please create a .env.local file with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. ' +
+    'See .env.example for reference.'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
- * Converte e comprime uma imagem para WebP no lado do cliente
+ * Converte e comprime uma imagem para WebP ou JPEG no lado do cliente
+ * Garante que imagens mobile (iPhone/Android) sejam comprimidas corretamente
  */
-const compressAndConvertToWebP = async (file: File): Promise<Blob> => {
+const compressImage = async (file: File): Promise<{ blob: Blob; ext: string }> => {
   return new Promise(async (resolve, reject) => {
     try {
-      let imageBitmap: ImageBitmap | null = null;
+      let imageSource: any = null;
       let width = 0;
       let height = 0;
 
-      // Prefer createImageBitmap for performance (off-main-thread decoding in some browsers)
+      // Suporte para ImageOrientation e melhor performance em browsers modernos (incluindo iOS 15+)
       if ('createImageBitmap' in window) {
-        imageBitmap = await createImageBitmap(file);
-        width = imageBitmap.width;
-        height = imageBitmap.height;
-      } else {
-        // Fallback for older browsers
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        await new Promise((res) => (img.onload = res));
-        width = img.width;
-        height = img.height;
-        imageBitmap = img as any; // Cast to satisfy type, although logic differs slightly
+        try {
+          // 'from-image' garante que a orientação EXIF do iPhone seja respeitada
+          imageSource = await createImageBitmap(file, { imageOrientation: 'from-image' });
+          width = imageSource.width;
+          height = imageSource.height;
+        } catch (e) {
+          console.warn("createImageBitmap falhou, tentando fallback Image", e);
+        }
       }
 
-      if (!imageBitmap) throw new Error("Falha ao processar imagem");
+      if (!imageSource) {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.src = url;
+        await new Promise((res, rej) => {
+          img.onload = res;
+          img.onerror = rej;
+        });
+        width = img.width;
+        height = img.height;
+        imageSource = img;
+        URL.revokeObjectURL(url);
+      }
 
+      if (!imageSource) throw new Error("Falha ao processar imagem");
+
+      // Redimensionamos para um máximo razoável para web (1200px)
       const MAX_WIDTH = 1200;
       const MAX_HEIGHT = 1200;
 
@@ -55,21 +76,36 @@ const compressAndConvertToWebP = async (file: File): Promise<Blob> => {
 
       if (!ctx) throw new Error("Contexto 2D indisponível");
 
-      // Draw image/bitmap
-      ctx.drawImage(imageBitmap as any, 0, 0, canvas.width, canvas.height);
+      // Limpa canvas e desenha
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
 
-      // Cleanup bitmap to free memory immediately
-      if (imageBitmap && 'close' in imageBitmap) {
-        (imageBitmap as ImageBitmap).close();
+      // Cleanup se for bitmap
+      if (imageSource instanceof ImageBitmap) {
+        imageSource.close();
       }
 
+      // Tenta WebP primeiro (melhor compressão)
+      // Se o browser não suportar, ele geralmente retorna PNG (que é enorme)
+      // Por isso, validamos o mimetype do blob resultante
       canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Falha na conversão para WebP'));
+        async (webpBlob) => {
+          if (webpBlob && webpBlob.type === 'image/webp') {
+            resolve({ blob: webpBlob, ext: 'webp' });
+          } else {
+            // Fallback para JPEG (muito melhor que PNG para fotos)
+            canvas.toBlob(
+              (jpgBlob) => {
+                if (jpgBlob) resolve({ blob: jpgBlob, ext: 'jpg' });
+                else reject(new Error('Falha na compressão JPEG'));
+              },
+              'image/jpeg',
+              0.7 // Qualidade 0.7 para garantir arquivos na faixa de 100-200kb
+            );
+          }
         },
         'image/webp',
-        0.75 // Slightly reduced quality for better performance/size ratio on mobile
+        0.75
       );
     } catch (error) {
       reject(error);
@@ -79,19 +115,23 @@ const compressAndConvertToWebP = async (file: File): Promise<Blob> => {
 
 export const uploadImage = async (file: File, path: string): Promise<string | null> => {
   try {
-    // Check if it's an image by MIME type OR file extension
+    // Detecta se é imagem por tipo ou extensão (incluindo HEIC de iPhones)
     const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(file.name);
 
     if (isImage) {
-      const webpBlob = await compressAndConvertToWebP(file);
+      const { blob, ext } = await compressImage(file);
 
-      const fileName = `${Math.random().toString(36).substring(2)}.webp`;
+      const fileName = `${Math.random().toString(36).substring(2)}.${ext}`;
       const filePath = `${path}/${fileName}`;
       const bucketName = 'project-images';
 
       const { error: uploadError } = await supabase.storage
         .from(bucketName)
-        .upload(filePath, webpBlob, { contentType: 'image/webp' });
+        .upload(filePath, blob, {
+          contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (uploadError) throw uploadError;
 

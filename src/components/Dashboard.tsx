@@ -32,6 +32,7 @@ const isTodayOrActive = (task: Task) => task.status === TaskStatus.IN_PROGRESS |
 export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveTab, onNavigateToExecution }) => {
     const [recentLogs, setRecentLogs] = useState<LogEntry[]>([]);
     const [phaseProgress, setPhaseProgress] = useState<Record<string, PhaseDetailData>>({});
+    const [buildingOverallPct, setBuildingOverallPct] = useState(0);
     const [selectedSectorPhase, setSelectedSectorPhase] = useState<PhaseConfig | null>(null);
     const [notes, setNotes] = useState<{ forMe: Note[], myPosts: Note[], general: Note[] }>({ forMe: [], myPosts: [], general: [] });
     const [recentSupplies, setRecentSupplies] = useState<SupplyOrder[]>([]);
@@ -161,6 +162,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
         });
 
         setPhaseProgress(result);
+
+        // Compute building-wide overall progress (same formula as ExecutionTab)
+        let totalPct = 0;
+        let pctCount = 0;
+        progress.forEach((p: any) => {
+            totalPct += p.percentage || 0;
+            pctCount++;
+        });
+        setBuildingOverallPct(pctCount > 0 ? Math.round(totalPct / pctCount) : 0);
     };
 
     const fetchNotes = async (email: string) => {
@@ -201,6 +211,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                         </div>
                     </div>
                 )}
+            </div>
+
+            {/* EVOLUÇÃO GERAL DO PRÉDIO */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 md:p-4">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                        <Building2 size={12} className="text-emerald-600" />
+                        <span className="font-black text-slate-700 text-[10px] uppercase tracking-widest">Evolução Geral do Prédio</span>
+                    </div>
+                    <span className="text-lg font-black text-slate-800">{buildingOverallPct}%</span>
+                </div>
+                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-1000 ease-out rounded-full"
+                        style={{ width: `${buildingOverallPct}%` }}
+                    />
+                </div>
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 md:p-4">

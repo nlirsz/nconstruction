@@ -499,6 +499,20 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                     <input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
                                 </div>
                                 <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Previsão Entrega</label>
+                                    <input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Formato Portal</label>
+                                    <select value={formData.deliveryFormat || 'month'} onChange={e => setFormData({ ...formData, deliveryFormat: e.target.value as 'month' | 'semester' })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-white">
+                                        <option value="month">Mês/Ano</option>
+                                        <option value="semester">Semestre/Ano</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Cor</label>
                                     <select value={formData.themeColor} onChange={e => setFormData({ ...formData, themeColor: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-white">
                                         {THEME_COLORS.map(c => <option key={c.value} value={c.value}>{c.name}</option>)}

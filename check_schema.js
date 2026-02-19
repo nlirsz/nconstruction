@@ -1,7 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
-const supabaseUrl = 'https://zozohlwhjqxittkpgikv.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpvem9obHdoanF4aXR0a3BnaWt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3MzM3MzAsImV4cCI6MjA3OTMwOTczMH0.4yUK3w6R-fCDBOzFFf55naEkZoA6_clcmT96PLqleEY';
+
+// Read from environment variables (set in .env.local or shell)
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('ERROR: Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables.');
+    console.error('Set them in your shell or create a .env.local file.');
+    process.exit(1);
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 async function checkSchema() {

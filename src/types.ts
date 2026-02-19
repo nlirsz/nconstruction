@@ -69,6 +69,7 @@ export interface Project {
   phases?: PhaseConfig[];
   startDate?: string;
   endDate?: string;
+  deliveryFormat?: 'month' | 'semester';
   user_id?: string;
 }
 
@@ -273,13 +274,30 @@ export interface OrganizationMember {
 export type VerificationStatus = 'ok' | 'pending' | 'warning';
 
 export interface UnitVerification {
-    id: string;
-    unit_id: string;
-    phase_id: string;
-    subtask_name: string;
-    status: VerificationStatus;
-    comment?: string;
-    image_url?: string;
-    verified_by: string;
-    verified_at: string;
+  id: string;
+  unit_id: string;
+  phase_id: string;
+  subtask_name: string;
+  status: VerificationStatus;
+  comment?: string;
+  image_url?: string;
+  verified_by: string;
+  verified_at: string;
+}
+
+export interface UnitPermission {
+  id: string;
+  user_id: string;
+  project_id: string;
+  unit_id: string;
+  common_areas: string[];
+  scopes: string[];
+  role: 'client' | 'architect' | 'admin';
+  job_title?: string;
+  phone?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  profiles?: UserProfile;
+  unit?: UnitConfig;
 }

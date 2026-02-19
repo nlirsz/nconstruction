@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { GanttView } from './components/GanttView';
@@ -15,9 +15,10 @@ import { DocumentsTab } from './components/DocumentsTab';
 import { AsBuiltTab } from './components/AsBuiltTab';
 import { GalleryTab } from './components/GalleryTab';
 import { Login } from './components/Login';
+import { CustomerDashboard } from './components/CustomerDashboard';
 import { OrganizationSetup } from './components/OrganizationSetup';
 import { OrganizationSettings } from './components/OrganizationSettings';
-import { Project, Task, UserProfile, Organization, TaskStatus } from './types';
+import { Project, Task, UserProfile, Organization, TaskStatus, UnitPermission } from './types';
 import { Menu, Database, Copy, Check, X, AlertTriangle, Bell, User as UserIcon } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 import { NotificationCenter } from './components/NotificationCenter';
@@ -43,23 +44,43 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [targetUnitId, setTargetUnitId] = useState<string | null>(null);
   const [targetPhaseId, setTargetPhaseId] = useState<string | null>(null);
+  const [userProjectPermission, setUserProjectPermission] = useState<UnitPermission | null>(null);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  const [loadingPermission, setLoadingPermission] = useState(false);
+
+  // Use ref to track data loading status to avoid stale closure issues in auth listener
+  const dataLoadedRef = useRef(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initialize = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
-      setLoadingSession(false);
-      if (session) {
-        fetchUserProfile(session.user.id);
-        fetchOrganizations(session.user.id);
-      }
-    });
+      setLoadingSession(false); // Only critical for first load
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
       if (session) {
-        fetchUserProfile(session.user.id);
-        fetchOrganizations(session.user.id);
+        const userId = session.user.id;
+        await Promise.all([
+          fetchUserProfile(userId),
+          fetchOrganizations(userId)
+        ]);
       } else {
+        setLoadingProjects(false);
+        setLoadingOrgs(false);
+      }
+    };
+
+    initialize();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      if (event === 'SIGNED_IN') {
+        fetchUserProfile(session!.user.id);
+        fetchOrganizations(session!.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setLoadingSession(false);
+        setLoadingOrgs(false);
+        setLoadingProjects(false);
         setSelectedProject(null);
         setProjects([]);
         setTasks([]);
@@ -67,6 +88,7 @@ const App: React.FC = () => {
         setOrganizations([]);
         setCurrentOrganization(null);
         setActiveTab('dashboard');
+        dataLoadedRef.current = false;
       }
     });
 
@@ -79,15 +101,14 @@ const App: React.FC = () => {
   };
 
   const fetchOrganizations = async (userId: string) => {
-    setLoadingOrgs(true);
+    // Only show loading if we haven't loaded data yet (check ref to avoid stale closure)
+    if (!dataLoadedRef.current) setLoadingOrgs(true);
+
     try {
-      const { data, error } = await supabase.from('organizations').select('*');
-      if (error) {
-        setOrganizations([]);
-        setCurrentOrganization(null);
-      } else if (data && data.length > 0) {
+      const { data } = await supabase.from('organizations').select('*');
+      if (data && data.length > 0) {
         setOrganizations(data);
-        setCurrentOrganization(prev => (prev && data.find(o => o.id === prev.id)) ? prev : data[0]);
+        setCurrentOrganization(data[0]);
       } else {
         setOrganizations([]);
         setCurrentOrganization(null);
@@ -95,48 +116,68 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Failed to fetch organizations", error);
     } finally {
-      setLoadingOrgs(false);
+      // Don't set loadingOrgs to false here, wait for projects to fetch
+      // But if we didn't set it to true (refresh), we don't need to worry?
+      // Actually, we pass through to fetchProjects regardless
+      fetchProjects();
     }
   };
 
-  useEffect(() => {
-    if (session) {
-      fetchProjects();
-      // fetchTasks(); // Removed as tasks will be fetched per project
-    }
-  }, [session]);
+  const fetchUserPermission = async (projectId: string) => {
+    if (!session?.user?.id) return;
+    const { data } = await supabase
+      .from('unit_permissions')
+      .select('*, unit:project_units(name)')
+      .eq('project_id', projectId)
+      .eq('user_id', session.user.id)
+      .eq('is_active', true)
+      .maybeSingle();
 
-  // New useEffect to fetch tasks when selectedProject changes
-  useEffect(() => {
-    if (selectedProject) {
-      // fetchPhotos(); // fetchPhotos is not defined in the provided code, so commenting out to avoid errors.
-      fetchTasks(selectedProject.id);
-    } else if (session) {
-      // Quando voltar para a tela inicial (selectedProject === null), recarrega os projetos
-      fetchProjects();
-    }
-  }, [selectedProject?.id]);
+    setUserProjectPermission(data as UnitPermission);
+  };
 
   const fetchProjects = async () => {
-    if (!session?.user) return;
-    const userId = session.user.id;
-    try {
-      const { data: ownedProjects } = await supabase.from('projects').select('*').eq('user_id', userId);
-      const { data: memberRows } = await supabase.from('project_members').select('project_id').eq('user_id', userId);
-      const memberProjectIds = (memberRows || []).map((row: any) => row.project_id);
+    if (!session?.user) {
+      setLoadingProjects(false);
+      setLoadingOrgs(false);
+      return;
+    }
 
-      let guestProjects: any[] = [];
-      if (memberProjectIds.length > 0) {
-        const { data } = await supabase.from('projects').select('*').in('id', memberProjectIds);
-        guestProjects = data || [];
+    // Only show full loading if we haven't loaded data yet
+    if (!dataLoadedRef.current) setLoadingProjects(true);
+
+    const userId = session.user.id;
+    const userEmail = session.user.email?.toLowerCase();
+
+    try {
+      // Buscar tudo em uma pancada só
+      const { data: myOrgs } = await supabase.from('organizations').select('id');
+      const orgIds = (myOrgs || []).map(o => o.id);
+
+      const [ownedRes, orgRes, memberRes, permRes] = await Promise.all([
+        supabase.from('projects').select('*').eq('user_id', userId),
+        orgIds.length > 0 ? supabase.from('projects').select('*').in('organization_id', orgIds) : Promise.resolve({ data: [] }),
+        supabase.from('project_members').select('project_id').eq('user_id', userId),
+        supabase.from('unit_permissions').select('project_id').or(`user_id.eq.${userId}${userEmail ? `,email.eq."${userEmail}"` : ''}`)
+      ]);
+
+      const guestIds = [
+        ...(memberRes.data || []).map((r: any) => r.project_id),
+        ...(permRes.data || []).map((r: any) => r.project_id)
+      ];
+
+      let extraProjects: any[] = [];
+      if (guestIds.length > 0) {
+        const { data } = await supabase.from('projects').select('*').in('id', guestIds);
+        extraProjects = data || [];
       }
 
-      const uniqueProjectsMap = new Map();
-      [...(ownedProjects || []), ...guestProjects].forEach(p => {
-        if (p && p.id) uniqueProjectsMap.set(p.id, p);
+      const map = new Map();
+      [...(ownedRes.data || []), ...(orgRes.data || []), ...extraProjects].forEach(p => {
+        if (p && p.id) map.set(p.id, p);
       });
 
-      const mappedProjects: Project[] = Array.from(uniqueProjectsMap.values()).map((p: any) => ({
+      const mapped = Array.from(map.values()).map((p: any) => ({
         id: p.id,
         organization_id: p.organization_id,
         name: p.name,
@@ -151,18 +192,33 @@ const App: React.FC = () => {
         phases: p.phases,
         startDate: p.start_date,
         endDate: p.end_date,
+        deliveryFormat: p.delivery_format,
         user_id: p.user_id
       }));
 
-      setProjects(mappedProjects);
+      const combined = mapped.sort((a, b) => a.name.localeCompare(b.name));
+      setProjects(combined);
+
+      // Auto-select project if user has only one project and is not staff
+      // This is a rough check, but helps with the 'flashing' issue for clients
+      const hasNoOrgs = organizations.length === 0;
+      const hasOnlyOneProject = combined.length === 1;
+      const ownsNoProjects = !combined.some(p => p.user_id === userId);
+
+      if (hasNoOrgs && ownsNoProjects && hasOnlyOneProject && !selectedProject) {
+        setSelectedProject(combined[0]);
+      }
+
       if (selectedProject) {
-        const updated = mappedProjects.find(p => p.id === selectedProject.id);
-        if (updated && JSON.stringify(updated) !== JSON.stringify(selectedProject)) {
-          setSelectedProject(updated);
-        }
+        const updated = mapped.find(p => p.id === selectedProject.id);
+        if (updated) setSelectedProject(updated);
       }
     } catch (error) {
-      console.error("Erro crítico ao buscar projetos:", error);
+      console.error("Erro ao buscar projetos:", error);
+    } finally {
+      dataLoadedRef.current = true;
+      setLoadingProjects(false);
+      setLoadingOrgs(false);
     }
   };
 
@@ -170,7 +226,6 @@ const App: React.FC = () => {
     try {
       let query = supabase.from('tasks').select('*');
       if (projectId) query = query.eq('project_id', projectId);
-
       const { data, error } = await query;
       if (!error) {
         setTasks(data.map((t: any) => ({
@@ -194,213 +249,106 @@ const App: React.FC = () => {
     } catch (err) { console.error(err); }
   };
 
-  const handleAddProject = async (newProject: Project) => {
-    const { error } = await supabase.from('projects').insert({
-      organization_id: currentOrganization?.id || null,
-      name: newProject.name,
-      address: newProject.address,
-      resident_engineer: newProject.residentEngineer,
-      progress: newProject.progress,
-      budget_consumed: newProject.budgetConsumed,
-      status: newProject.status,
-      image_url: newProject.imageUrl,
-      theme_color: newProject.themeColor,
-      structure: newProject.structure,
-      phases: newProject.phases,
-      start_date: newProject.startDate,
-      end_date: newProject.endDate,
+  useEffect(() => {
+    if (selectedProject) {
+      // If we already have permissions for this project, don't show loading screen
+      // This prevents flashing when focusing window or minor session updates
+      if (userProjectPermission?.project_id === selectedProject.id) {
+        fetchTasks(selectedProject.id);
+        return;
+      }
+
+      setLoadingPermission(true);
+      Promise.all([
+        fetchTasks(selectedProject.id),
+        fetchUserPermission(selectedProject.id)
+      ]).finally(() => {
+        setLoadingPermission(false);
+      });
+    } else if (session?.user?.id) {
+      fetchProjects();
+      setUserProjectPermission(null);
+    }
+  }, [selectedProject?.id, session?.user?.id]);
+
+  const handleAddProject = async (project: Omit<Project, 'id' | 'progress' | 'budgetConsumed' | 'status'>) => {
+    const { data, error } = await supabase.from('projects').insert({
+      name: project.name,
+      address: project.address,
+      resident_engineer: project.residentEngineer,
+      image_url: project.imageUrl,
+      theme_color: project.themeColor,
+      start_date: project.startDate,
+      end_date: project.endDate,
+      delivery_format: project.deliveryFormat,
+      organization_id: project.organization_id,
+      progress: 0,
+      budget_consumed: 0,
+      status: 'green',
       user_id: session.user.id
-    });
-    if (!error) fetchProjects();
+    }).select().single();
+    if (!error && data) fetchProjects();
   };
 
-  const handleUpdateProject = async (updatedProject: Project) => {
+  const handleUpdateProject = async (project: Project) => {
     const { error } = await supabase.from('projects').update({
-      organization_id: updatedProject.organization_id,
-      name: updatedProject.name,
-      address: updatedProject.address,
-      resident_engineer: updatedProject.residentEngineer,
-      progress: updatedProject.progress,
-      budget_consumed: updatedProject.budgetConsumed,
-      status: updatedProject.status,
-      image_url: updatedProject.imageUrl,
-      theme_color: updatedProject.themeColor,
-      structure: updatedProject.structure,
-      phases: updatedProject.phases,
-      start_date: updatedProject.startDate,
-      end_date: updatedProject.endDate
-    }).eq('id', updatedProject.id);
-
+      name: project.name,
+      address: project.address,
+      resident_engineer: project.residentEngineer,
+      image_url: project.imageUrl,
+      theme_color: project.themeColor,
+      structure: project.structure,
+      phases: project.phases,
+      start_date: project.startDate,
+      end_date: project.endDate,
+      delivery_format: project.deliveryFormat,
+      organization_id: project.organization_id
+    }).eq('id', project.id);
     if (!error) fetchProjects();
   };
 
   const handleDeleteProject = async (id: string) => {
-    if (!window.confirm("Confirmar exclusão definitiva da obra?")) return;
     const { error } = await supabase.from('projects').delete().eq('id', id);
     if (!error) {
-      setProjects(prev => prev.filter(p => p.id !== id));
+      setProjects(projects.filter(p => p.id !== id));
       if (selectedProject?.id === id) setSelectedProject(null);
     }
   };
 
-  const handleAddTask = async (newTask: Task) => {
-    // Ajuste automático de status baseado no progresso
-    let finalStatus = newTask.status;
-    if (newTask.progress === 100) finalStatus = TaskStatus.COMPLETED;
-    else if (newTask.progress > 0 && (finalStatus === TaskStatus.NOT_STARTED || !finalStatus)) finalStatus = TaskStatus.IN_PROGRESS;
-
+  const handleAddTask = async (task: Omit<Task, 'id'>) => {
     const { error } = await supabase.from('tasks').insert({
-      project_id: newTask.projectId,
-      name: newTask.name,
-      custom_id: newTask.customId,
-      description: newTask.description,
-      start: newTask.start,
-      end: newTask.end,
-      progress: newTask.progress || 0,
-      status: finalStatus || TaskStatus.NOT_STARTED,
-      dependencies: newTask.dependencies,
-      assigned_to: newTask.assignedTo,
-      image_url: newTask.imageUrl,
-      linked_unit_id: newTask.linked_unit_id || null, // Convert empty string to null for UUID
-      linked_phase_id: newTask.linked_phase_id || null,
-      linked_subtasks: newTask.linked_subtasks || null
+      project_id: task.projectId,
+      name: task.name,
+      start: task.start,
+      end: task.end,
+      progress: task.progress,
+      status: task.status
     });
-
-    if (error) {
-      console.error("Erro ao adicionar tarefa:", error);
-      alert(`Erro ao adicionar tarefa: ${error.message}`);
-    } else {
-      if (newTask.linked_unit_id && newTask.linked_phase_id) {
-        if (newTask.progress === 100 || newTask.status === 'Concluído') {
-          await supabase.from('unit_progress').upsert({
-            project_id: newTask.projectId,
-            unit_id: newTask.linked_unit_id,
-            phase_id: newTask.linked_phase_id,
-            percentage: 100,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'unit_id, phase_id' });
-        }
-      }
-      fetchTasks(newTask.projectId);
-    }
+    if (!error && selectedProject) fetchTasks(selectedProject.id);
   };
 
   const handleUpdateTask = async (updatedTask: Task) => {
-    // Ajuste automático de status baseado no progresso
-    let finalStatus = updatedTask.status;
-    if (updatedTask.progress === 100) finalStatus = TaskStatus.COMPLETED;
-    else if (updatedTask.progress > 0 && finalStatus === TaskStatus.NOT_STARTED) finalStatus = TaskStatus.IN_PROGRESS;
-
-    const oldTask = tasks.find(t => t.id === updatedTask.id);
-    const shiftInDays = oldTask ? diffDays(parseLocalDate(updatedTask.end), parseLocalDate(oldTask.end)) : 0;
-
     const { error } = await supabase.from('tasks').update({
       name: updatedTask.name,
-      custom_id: updatedTask.customId,
-      description: updatedTask.description,
       start: updatedTask.start,
       end: updatedTask.end,
       progress: updatedTask.progress,
-      status: finalStatus,
-      dependencies: updatedTask.dependencies,
-      assigned_to: updatedTask.assignedTo,
-      image_url: updatedTask.imageUrl,
-      linked_unit_id: updatedTask.linked_unit_id || null, // Convert empty string to null for UUID
-      linked_phase_id: updatedTask.linked_phase_id || null,
-      linked_subtasks: updatedTask.linked_subtasks || null,
-      updated_at: new Date().toISOString()
+      status: updatedTask.status,
+      linked_unit_id: updatedTask.linked_unit_id,
+      linked_phase_id: updatedTask.linked_phase_id,
+      linked_subtasks: updatedTask.linked_subtasks
     }).eq('id', updatedTask.id);
-
-    if (error) {
-      console.error("Erro ao atualizar tarefa:", error);
-      alert(`Erro ao atualizar tarefa: ${error.message}`);
-    } else {
-      // Cascading logic - recursiva
-      if (shiftInDays !== 0) {
-        const cascadeShift = async (parentId: string, days: number) => {
-          const dependents = tasks.filter(t => t.dependencies?.includes(parentId));
-          for (const dep of dependents) {
-            const newStart = addDays(parseLocalDate(dep.start), days);
-            const newEnd = addDays(parseLocalDate(dep.end), days);
-
-            await supabase.from('tasks').update({
-              start: formatLocalDate(newStart),
-              end: formatLocalDate(newEnd)
-            }).eq('id', dep.id);
-
-            // Continua a cascata para os dependentes desta tarefa
-            await cascadeShift(dep.id, days);
-          }
-        };
-        await cascadeShift(updatedTask.id, shiftInDays);
-      }
-
-      // Sincronização BIDIRECIONAL: Cronograma → Execução
+    if (!error && selectedProject) {
       if (updatedTask.linked_unit_id && updatedTask.linked_phase_id) {
-        // Busca o progresso atual da unidade para preservar outras subtarefas
-        const { data: existingProgress } = await supabase
-          .from('unit_progress')
-          .select('subtasks, percentage')
-          .eq('unit_id', updatedTask.linked_unit_id)
-          .eq('phase_id', updatedTask.linked_phase_id)
-          .single();
-
-        let updatedSubtasks = existingProgress?.subtasks || {};
-
-        // Se a tarefa tem subtarefas específicas vinculadas, atualiza apenas elas
-        if (updatedTask.linked_subtasks && updatedTask.linked_subtasks.length > 0) {
-          updatedTask.linked_subtasks.forEach((subtaskName: string) => {
-            const currentSubtask = updatedSubtasks[subtaskName] || {};
-            updatedSubtasks[subtaskName] = {
-              ...(typeof currentSubtask === 'object' ? currentSubtask : { progress: currentSubtask }),
-              progress: updatedTask.progress
-            };
-          });
-
-          // Recalcula a porcentagem geral da fase baseado em TODAS as subtarefas
-          // Busca as fases do projeto para saber quais subtarefas existem
-          const { data: projectData } = await supabase
-            .from('projects')
-            .select('phases')
-            .eq('id', updatedTask.projectId)
-            .single();
-
-          const phases = projectData?.phases || [];
-          const currentPhase = phases.find((p: any) => p.id === updatedTask.linked_phase_id);
-          const allSubtaskNames = currentPhase?.subtasks || [];
-
-          let sum = 0;
-          let count = 0;
-          allSubtaskNames.forEach((name: string) => {
-            const subtask = updatedSubtasks[name];
-            const progress = typeof subtask === 'object' ? subtask.progress : subtask;
-            sum += progress || 0;
-            count++;
-          });
-
-          const newPercentage = count > 0 ? Math.round(sum / count) : updatedTask.progress;
-
-          await supabase.from('unit_progress').upsert({
-            project_id: updatedTask.projectId,
-            unit_id: updatedTask.linked_unit_id,
-            phase_id: updatedTask.linked_phase_id,
-            percentage: newPercentage,
-            subtasks: updatedSubtasks,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'unit_id, phase_id' });
+        const { data: existingProgress } = await supabase.from('unit_progress').select('*').eq('unit_id', updatedTask.linked_unit_id).eq('phase_id', updatedTask.linked_phase_id).maybeSingle();
+        const updatedSubtasks = updatedTask.linked_subtasks || [];
+        if (existingProgress) {
+          await supabase.from('unit_progress').update({ subtasks: updatedSubtasks, updated_at: new Date().toISOString() }).eq('id', existingProgress.id);
         } else {
-          // Se não tem subtarefas específicas, atualiza a porcentagem geral da fase
-          await supabase.from('unit_progress').upsert({
-            project_id: updatedTask.projectId,
-            unit_id: updatedTask.linked_unit_id,
-            phase_id: updatedTask.linked_phase_id,
-            percentage: updatedTask.progress,
-            subtasks: updatedSubtasks,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'unit_id, phase_id' });
+          await supabase.from('unit_progress').insert({ project_id: updatedTask.projectId, unit_id: updatedTask.linked_unit_id, phase_id: updatedTask.linked_phase_id, subtasks: updatedSubtasks, updated_at: new Date().toISOString() });
         }
       }
-      fetchTasks(updatedTask.projectId);
+      fetchTasks(selectedProject.id);
     }
   };
 
@@ -415,24 +363,37 @@ const App: React.FC = () => {
     setActiveTab('execution');
   };
 
+  // Determine if user is guest (client/architect) for current project
+  const isGuestUser = (() => {
+    if (!selectedProject || !userProjectPermission) return false;
+    const isOwner = selectedProject.user_id === session?.user?.id;
+    const isOrgMember = organizations.some(o => o.id === selectedProject.organization_id);
+    const isAdminRole = userProjectPermission?.role === 'admin';
+    const isStaff = isOwner || isOrgMember || isAdminRole;
+    return !isStaff && (userProjectPermission.role === 'client' || userProjectPermission.role === 'architect');
+  })();
+
   const renderContent = () => {
     if (!selectedProject) return null;
-    const projectTasks = tasks.filter(t => t.projectId === selectedProject.id);
 
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard project={selectedProject} tasks={projectTasks} setActiveTab={setActiveTab} onNavigateToExecution={handleNavigateToExecution} />;
-      case 'gantt': return <GanttView tasks={projectTasks} projects={[selectedProject]} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />;
-      case 'execution': return (
-        <ExecutionTab
+    if (isGuestUser && userProjectPermission) {
+      return (
+        <CustomerDashboard
           project={selectedProject}
+          projects={projects}
+          permission={userProjectPermission}
           userProfile={userProfile}
-          currentUser={session?.user}
-          initialUnitId={targetUnitId}
-          initialPhaseId={targetPhaseId}
-          onClearInitialUnit={() => { setTargetUnitId(null); setTargetPhaseId(null); }}
-          onUpdateProgress={(p) => setSelectedProject({ ...selectedProject, progress: p })}
+          onLogout={() => setSelectedProject(null)}
+          onSelectProject={(p) => setSelectedProject(p)}
+          session={session}
         />
       );
+    }
+
+    const projectTasks = tasks.filter(t => t.projectId === selectedProject.id);
+    switch (activeTab) {
+      case 'gantt': return <GanttView tasks={projectTasks} projects={[selectedProject]} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />;
+      case 'execution': return <ExecutionTab project={selectedProject} userProfile={userProfile} currentUser={session?.user} initialUnitId={targetUnitId} initialPhaseId={targetPhaseId} onClearInitialUnit={() => { setTargetUnitId(null); setTargetPhaseId(null); }} onUpdateProgress={(p) => setSelectedProject({ ...selectedProject, progress: p })} />;
       case 'reports': return <ReportsTab project={selectedProject} userProfile={userProfile} organization={currentOrganization} />;
       case 'units': return <UnitProgress project={selectedProject} currentUser={session.user} userProfile={userProfile} onUpdateProgress={(p) => setSelectedProject({ ...selectedProject, progress: p })} onNavigateToExecution={handleNavigateToExecution} />;
       case 'notes': return <NotesTab project={selectedProject} currentUser={session?.user} userProfile={userProfile} />;
@@ -447,47 +408,48 @@ const App: React.FC = () => {
     }
   };
 
-  if (loadingSession) return <div className="flex h-screen items-center justify-center bg-slate-100 text-slate-500">Carregando...</div>;
+  if (loadingSession) return <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">Verificando sessão...</div>;
   if (!session) return <Login />;
 
-  if (!loadingOrgs && organizations.length === 0) {
-    return <OrganizationSetup currentUser={session.user} onOrganizationCreated={(org) => { setOrganizations([org]); setCurrentOrganization(org); fetchProjects(); }} />;
+  if (!loadingOrgs && !loadingProjects && !loadingSession) {
+    const hasAnyOrg = organizations.length > 0;
+    const hasAnyProject = projects.length > 0;
+    const isMainAdmin = session.user.email === 'luhrsnicolas@gmail.com' || session.user.email === 'teste@teste.com';
+    const isPotentiallyClient = !hasAnyOrg && hasAnyProject;
+
+    // Only show Organization Setup if we are SURE user is not a client with projects
+    if (!hasAnyOrg && !hasAnyProject && !isMainAdmin && !isPotentiallyClient) {
+      return <OrganizationSetup currentUser={session.user} onOrganizationCreated={(org) => { setOrganizations([org]); setCurrentOrganization(org); fetchProjects(); }} />;
+    }
+  } else {
+    // Show loading while ANY critical data is fetching
+    return <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">Carregando ambiente...</div>;
   }
 
   if (!selectedProject) {
     return (
       <div className="min-h-screen bg-slate-50">
-        <ProjectsManager
-          projects={projects}
-          tasks={tasks}
-          currentUser={session.user}
-          organizations={organizations}
-          currentOrganization={currentOrganization}
-          onAddProject={handleAddProject}
-          onUpdateProject={handleUpdateProject}
-          onDeleteProject={handleDeleteProject}
-          onSelectProject={(p) => { setSelectedProject(p); setActiveTab('dashboard'); }}
-          onOpenProfile={() => setIsProfileOpen(true)}
-          userProfile={userProfile}
-          onRefresh={fetchProjects}
-          onCreateOrganization={() => setIsOrgCreateOpen(true)}
-        />
+        <ProjectsManager projects={projects} tasks={tasks} currentUser={session.user} organizations={organizations} currentOrganization={currentOrganization} onAddProject={handleAddProject} onUpdateProject={handleUpdateProject} onDeleteProject={handleDeleteProject} onSelectProject={(p) => { setSelectedProject(p); setActiveTab('dashboard'); }} onOpenProfile={() => setIsProfileOpen(true)} userProfile={userProfile} onRefresh={fetchProjects} onCreateOrganization={() => setIsOrgCreateOpen(true)} />
         {isProfileOpen && <UserProfileModal session={session} isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} onProfileUpdate={setUserProfile} />}
       </div>
     );
+  }
+
+  // Prevent flash while determining role
+  if (loadingPermission) {
+    return <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">Carregando permissões...</div>;
+  }
+
+  // CLIENT/ARCHITECT: Render CustomerDashboard fullscreen (no staff sidebar)
+  if (isGuestUser) {
+    return renderContent();
   }
 
   return (
     <div className="min-h-screen bg-[#f3f4f6]">
       <header className={`fixed top-0 left-0 right-0 h-14 bg-slate-900 border-b border-white/10 z-[130] flex xl:hidden items-center justify-between px-3 shadow-lg`}>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-1.5 text-white hover:bg-white/10 rounded-lg transition-colors"
-            aria-label="Abrir Menu"
-          >
-            <Menu size={20} />
-          </button>
+          <button onClick={() => setIsSidebarOpen(true)} className="p-1.5 text-white hover:bg-white/10 rounded-lg transition-colors"><Menu size={20} /></button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-white rounded border border-slate-100 p-0.5 overflow-hidden">
               <img src={currentOrganization?.logo_url || APP_LOGO_URL} alt="Org" className="w-full h-full object-contain" />
@@ -498,43 +460,21 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="flex items-center gap-1.5">
           <NotificationCenter projects={projects} onSelectProject={setSelectedProject} currentUser={session.user} iconClassName="text-white hover:bg-white/10" />
           <button onClick={() => setIsProfileOpen(true)} className="w-7 h-7 rounded-full border border-white/20 overflow-hidden">
-            {userProfile?.avatar_url ? (
-              <img src={userProfile.avatar_url} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-white/10 text-white"><UserIcon size={14} /></div>
-            )}
+            {userProfile?.avatar_url ? <img src={userProfile.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-white/10 text-white"><UserIcon size={14} /></div>}
           </button>
         </div>
       </header>
-
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        project={selectedProject}
-        onBack={() => setSelectedProject(null)}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        userProfile={userProfile}
-        onOpenProfile={() => setIsProfileOpen(true)}
-        organization={currentOrganization}
-        onOpenOrgSettings={() => setIsOrgSettingsOpen(true)}
-      />
-
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} project={selectedProject} onBack={() => setSelectedProject(null)} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} isCollapsed={isSidebarCollapsed} onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)} userProfile={userProfile} onOpenProfile={() => setIsProfileOpen(true)} organization={currentOrganization} onOpenOrgSettings={() => setIsOrgSettingsOpen(true)} />
       <main className={`px-2 pb-4 pt-16 md:pt-20 md:px-4 md:pb-6 xl:pt-6 min-h-screen ${isSidebarCollapsed ? 'xl:ml-20' : 'xl:ml-64'}`}>
         <div className="w-full max-w-[1400px] mx-auto">{renderContent()}</div>
       </main>
-
       {isProfileOpen && <UserProfileModal session={session} isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} onProfileUpdate={setUserProfile} />}
       {isOrgSettingsOpen && currentOrganization && <OrganizationSettings organization={currentOrganization} onClose={() => setIsOrgSettingsOpen(false)} onUpdate={setCurrentOrganization} currentUser={session.user} />}
       {isOrgCreateOpen && <OrganizationSetup variant="modal" currentUser={session.user} onClose={() => setIsOrgCreateOpen(false)} onOrganizationCreated={(org) => { setOrganizations([...organizations, org]); setCurrentOrganization(org); setIsOrgCreateOpen(false); }} />}
     </div>
   );
 };
-
 export default App;

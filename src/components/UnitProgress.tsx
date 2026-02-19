@@ -13,19 +13,30 @@ import { DEFAULT_PHASES, getPhaseIcon, getPhaseColor } from '../constants';
 
 // Add CSS for hiding scrollbars but keeping functionality
 const scrollbarStyle = `
+  :root {
+    --left-col-width: 160px;
+  }
+  @media (max-width: 640px) {
+    :root {
+      --left-col-width: 120px;
+    }
+  }
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: #cbd5e1;
-    border-radius: 3px;
+    border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+  }
+  .sticky-header-shadow {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   }
 `;
 export const GlobalStyles = () => <style>{scrollbarStyle}</style>;
@@ -247,24 +258,45 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
 
             {viewMode === 'matrix' ? (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 overflow-hidden">
-                    {/* Legendas rápidas */}
-                    <div className="p-2 border-b border-slate-100 flex justify-end gap-4 bg-slate-50/50">
-                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-emerald-500"></div><span className="text-[7px] font-black text-slate-500 uppercase">Fim</span></div>
-                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-amber-400"></div><span className="text-[7px] font-black text-slate-500 uppercase">Processo</span></div>
-                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-blue-500"></div><span className="text-[7px] font-black text-slate-500 uppercase">Início</span></div>
+                    {/* Legendas Rápidas e Instruções */}
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4 bg-white/50 backdrop-blur-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                                <Info size={10} className="text-blue-500" />
+                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Clique em uma célula para ver o checklist detalhado</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1.5 select-none">
+                                <div className="w-2.5 h-2.5 rounded shadow-sm border border-emerald-600 bg-emerald-500"></div>
+                                <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider">Concluído (100%)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 select-none">
+                                <div className="w-2.5 h-2.5 rounded shadow-sm border border-blue-400 bg-blue-100"></div>
+                                <span className="text-[8px] font-black text-slate-600 uppercase tracking-wider">Em Execução</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 select-none">
+                                <div className="w-2.5 h-2.5 rounded shadow-sm border border-slate-200 bg-white"></div>
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Não Iniciado</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 select-none">
+                                <div className="w-2.5 h-2.5 rounded-full bg-slate-200"></div>
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">N/A</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="overflow-auto flex-1 custom-scrollbar relative">
+                    <div className="overflow-auto flex-1 custom-scrollbar relative border-t border-slate-100">
                         <div className="min-w-max">
                             {/* HEADER FIXO DA MATRIZ */}
-                            <div className="grid gap-0 sticky top-0 z-[40] bg-white border-b border-slate-200" style={{ gridTemplateColumns }}>
-                                <div className="sticky left-0 top-0 z-[50] bg-white px-4 py-3 border-r border-slate-200 shadow-sm flex items-center">
-                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pavimento</span>
+                            <div className="grid gap-0 sticky top-0 z-[60] bg-slate-50 border-b border-slate-200" style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 55px)` }}>
+                                <div className="sticky left-0 top-0 z-[70] bg-slate-100 px-4 py-3 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] flex items-center">
+                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pavimento / Unidade</span>
                                 </div>
                                 {projectPhases.map(p => (
-                                    <div key={p.id} className="text-center p-2 border-r border-slate-100 last:border-0 bg-white flex flex-col items-center justify-center">
-                                        <div className={`w-5 h-5 rounded flex items-center justify-center text-white mb-1 shadow-sm ${getPhaseColor(p.color)}`}>{getPhaseIcon(p.icon, 8)}</div>
-                                        <span className="text-[7px] font-black text-slate-500 uppercase truncate w-full" title={p.label}>{p.code}</span>
+                                    <div key={p.id} className="text-center p-2 border-r border-slate-200 last:border-0 bg-slate-50 flex flex-col items-center justify-center min-h-[50px] group/head cursor-help">
+                                        <div className={`w-6 h-6 rounded flex items-center justify-center text-white mb-1 shadow-sm transition-transform group-hover/head:scale-110 ${getPhaseColor(p.color)}`}>{getPhaseIcon(p.icon, 10)}</div>
+                                        <span className="text-[8px] font-black text-slate-600 uppercase truncate w-full px-1" title={p.label}>{p.code}</span>
                                     </div>
                                 ))}
                             </div>
@@ -279,20 +311,26 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
                                     return (
                                         <div key={floor.floor} className="border-b border-slate-100 last:border-0">
                                             {/* LINHA DE PAVIMENTO */}
-                                            <div className={`grid gap-0 transition-colors sticky left-0 z-[35] w-full border-b border-slate-50 ${isExpanded ? 'bg-blue-50/10' : 'bg-white hover:bg-blue-50/5'}`} style={{ gridTemplateColumns }}>
-                                                <div onClick={() => toggleFloor(floor.floor)} className="sticky left-0 z-[40] bg-inherit px-4 py-2 border-r border-slate-200 flex items-center gap-2 cursor-pointer transition-all">
-                                                    <div className={`w-5 h-5 flex items-center justify-center rounded text-[8px] font-black transition-all ${isExpanded ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-700'}`}>{floor.floor}</div>
-                                                    <span className="font-black text-[9px] text-slate-800 uppercase tracking-tighter truncate">{fLabel}</span>
-                                                    {isExpanded ? <ChevronUp size={10} className="text-slate-300 ml-auto" /> : <ChevronDown size={10} className="text-slate-300 ml-auto" />}
+                                            <div className={`grid gap-0 transition-all sticky left-0 z-[35] w-full border-b border-slate-200/50 ${isExpanded ? 'bg-blue-50/30' : 'bg-white hover:bg-slate-50'}`} style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 55px)` }}>
+                                                <div
+                                                    onClick={() => toggleFloor(floor.floor)}
+                                                    className="sticky left-0 z-[40] bg-inherit px-4 py-3 border-r border-slate-200 flex items-center gap-3 cursor-pointer transition-all shadow-[2px_0_5px_rgba(0,0,0,0.02)]"
+                                                >
+                                                    <div className={`w-6 h-6 flex items-center justify-center rounded-lg text-[10px] font-black transition-all ${isExpanded ? 'bg-slate-900 text-white shadow-lg scale-110' : 'bg-slate-100 text-slate-700'}`}>{floor.floor}</div>
+                                                    <span className="font-black text-[10px] text-slate-800 uppercase tracking-tight truncate flex-1">{fLabel}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{floor.units.length}</span>
+                                                        {isExpanded ? <ChevronUp size={12} className="text-blue-500" /> : <ChevronDown size={12} className="text-slate-400" />}
+                                                    </div>
                                                 </div>
                                                 {projectPhases.map((p) => {
                                                     const avg = floorStats[originalFloorIdx].averages[p.id];
                                                     return (
-                                                        <div key={`avg-${p.id}`} className="h-full border-r border-slate-50 last:border-0 flex flex-col items-center justify-center p-1 bg-inherit">
+                                                        <div key={`avg-${p.id}`} className="h-full border-r border-slate-100 last:border-0 flex flex-col items-center justify-center p-1 bg-inherit">
                                                             {isExpanded ? (
-                                                                <div className={`p-1 rounded text-white shadow-xs ${getPhaseColor(p.color)} opacity-80`}>{getPhaseIcon(p.icon, 8)}</div>
+                                                                <div className={`p-1.5 rounded-lg text-white shadow-xs ${getPhaseColor(p.color)} opacity-20`}>{getPhaseIcon(p.icon, 10)}</div>
                                                             ) : (
-                                                                <div className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${avg === 100 ? 'bg-emerald-100 text-emerald-800' : avg > 0 ? 'bg-blue-50 text-blue-700' : 'text-slate-300'}`}>{avg === -1 ? '-' : `${avg}%`}</div>
+                                                                <div className={`text-[8px] font-black px-2 py-1 rounded-lg ${avg === 100 ? 'bg-emerald-500 text-white shadow-sm' : avg > 0 ? 'bg-blue-100 text-blue-800' : 'text-slate-300 bg-slate-50/50'}`}>{avg === -1 ? '-' : `${avg}%`}</div>
                                                             )}
                                                         </div>
                                                     );
@@ -301,21 +339,25 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
 
                                             {/* UNIDADES DO PAVIMENTO */}
                                             {isExpanded && (
-                                                <div className="bg-white">
+                                                <div className="bg-slate-50/30 animate-in slide-in-from-top-1 duration-200">
                                                     {floor.units.map((unit: any, uIdx: number) => (
-                                                        <div key={unit.id} className="grid gap-0 group/unit bg-white hover:bg-slate-50 border-b border-slate-50 last:border-0" style={{ gridTemplateColumns }}>
-                                                            <div onClick={() => { setSelectedUnitSummary({ floorLabel: fLabel, unit }); }} className="sticky left-0 z-[30] bg-white border-r border-slate-200 shadow-sm px-4 py-1.5 text-[8px] font-bold text-slate-700 flex items-center gap-2 cursor-pointer transition-colors group-hover/unit:bg-blue-50">
-                                                                <div className="w-1 h-1 bg-blue-500 rounded-full shrink-0"></div>
-                                                                <span className="truncate">{unit.name}</span>
+                                                        <div key={unit.id} className="grid gap-0 group/unit bg-transparent hover:bg-blue-50/50 border-b border-slate-100 last:border-0 transition-colors" style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 55px)` }}>
+                                                            <div
+                                                                onClick={() => { setSelectedUnitSummary({ floorLabel: fLabel, unit }); }}
+                                                                className="sticky left-0 z-[30] bg-white group-hover/unit:bg-blue-50/80 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.01)] px-4 py-2 text-[9px] font-bold text-slate-700 flex items-center gap-3 cursor-pointer transition-colors"
+                                                            >
+                                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0 animate-pulse"></div>
+                                                                <span className="truncate flex-1">{unit.name}</span>
+                                                                <ArrowRight size={10} className="text-slate-300 opacity-0 group-hover/unit:opacity-100 transition-all -translate-x-2 group-hover/unit:translate-x-0" />
                                                             </div>
                                                             {projectPhases.map(p => {
                                                                 const isApplicable = floorPhases.some(fp => fp.id === p.id);
-                                                                if (!isApplicable) return <div key={p.id} className="h-full border-r border-slate-50 bg-slate-50/10 flex items-center justify-center"><Minus size={10} className="text-slate-200" /></div>;
+                                                                if (!isApplicable) return <div key={p.id} className="h-full border-r border-slate-100 bg-slate-100/20 flex items-center justify-center"><Minus size={10} className="text-slate-200" /></div>;
                                                                 const ph = unit.phases[p.id] || { percentage: 0 };
                                                                 return (
-                                                                    <div key={p.id} onClick={() => handleCellClick(unit, p, fLabel)} className={`h-full border-r border-slate-50 last:border-0 flex items-center justify-center p-1 transition-all cursor-pointer hover:bg-blue-50/30`}>
-                                                                        <div className={`w-full h-6 rounded flex items-center justify-center border transition-all ${ph.percentage === 100 ? 'bg-emerald-500 text-white border-emerald-600' : ph.percentage > 0 ? 'bg-white border-blue-200 text-blue-700' : 'text-slate-200 border-slate-50 bg-white'}`}>
-                                                                            {ph.percentage === 100 ? <Check size={10} strokeWidth={4} /> : <span className="text-[8px] font-black">{ph.percentage}%</span>}
+                                                                    <div key={p.id} onClick={() => handleCellClick(unit, p, fLabel)} className={`h-full border-r border-slate-100 last:border-0 flex items-center justify-center p-1.5 transition-all cursor-pointer hover:bg-blue-100/20`}>
+                                                                        <div className={`w-full h-7 rounded-lg flex items-center justify-center border transition-all duration-300 ${ph.percentage === 100 ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm scale-105' : ph.percentage > 0 ? 'bg-white border-blue-200 text-blue-700 font-black shadow-xs hover:border-blue-400' : 'text-slate-300 border-slate-100 bg-white/50 hover:bg-white hover:border-slate-200'}`}>
+                                                                            {ph.percentage === 100 ? <Check size={12} strokeWidth={4} /> : <span className="text-[9px] font-black">{ph.percentage}%</span>}
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -330,6 +372,7 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
                             </div>
                         </div>
                     </div>
+
                 </div>
             ) : (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 overflow-hidden p-4 relative min-h-[500px]">

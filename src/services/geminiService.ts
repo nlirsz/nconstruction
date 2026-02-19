@@ -2,7 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Task, WeatherCondition, SupplyItem } from "../types";
 
-// Always use process.env.API_KEY for initialization.
+// Uses VITE_GEMINI_API_KEY from environment variables.
+// See .env.example for setup instructions.
 
 /**
  * Generates a summary log for the Daily Report (RDO) using AI.
@@ -14,8 +15,8 @@ export const generateDailyLog = async (
   engineerName: string
 ): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+
     const taskSummary = tasks
       .map(t => `- ${t.name}: ${t.progress}% (${t.status})`)
       .join("\n");
@@ -51,7 +52,7 @@ export const analyzeProjectRisk = async (
   projectContext: string
 ): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
     const prompt = `Analise os riscos técnicos e de cronograma para este projeto de construção:
     ${projectContext}
@@ -80,7 +81,7 @@ export const analyzeProjectRisk = async (
  */
 export const parseSupplyList = async (csvContent: string): Promise<SupplyItem[]> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
     const prompt = `
       You are an expert construction data analyst. 
@@ -124,7 +125,7 @@ export const parseSupplyList = async (csvContent: string): Promise<SupplyItem[]>
     if (!jsonText) return [];
 
     const parsed = JSON.parse(jsonText);
-    
+
     // Map to SupplyItem type (add temporary IDs)
     return parsed.map((item: any, index: number) => ({
       id: `preview-${index}`,

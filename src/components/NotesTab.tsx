@@ -5,7 +5,7 @@ import { supabase, uploadFile } from '../services/supabaseClient';
 import {
     NotebookPen, Send, CheckCircle2, Circle, Clock, Trash2, MessageSquare,
     User, Tag, Filter, Edit2, X, Save, Search, Plus, Calendar,
-    Flag, Paperclip, MoreVertical, LayoutGrid, List, AlertCircle, Ban, ArrowRight, Upload, Loader2, MapPin
+    Flag, Paperclip, MoreVertical, LayoutGrid, List, AlertCircle, Ban, ArrowRight, Upload, Loader2, MapPin, Users
 } from 'lucide-react';
 
 interface NotesTabProps {
@@ -34,7 +34,8 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
 
     // View State
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
-    const [filterMode, setFilterMode] = useState<'all' | 'my'>('all');
+    const [filterMode, setFilterMode] = useState<'all' | 'my' | 'clients'>('all');
+    const [unitNames, setUnitNames] = useState<Record<string, string>>({});
     const [searchTerm, setSearchTerm] = useState('');
 
     // Modal State
@@ -91,6 +92,17 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
                 }
 
                 setProjectMembers(finalMembers);
+            }
+
+            // Fetch unit names for mapping client note contexts
+            const { data: unitsData } = await supabase
+                .from('project_units')
+                .select('id, name')
+                .eq('project_id', project.id);
+            if (unitsData) {
+                const map: Record<string, string> = {};
+                unitsData.forEach((u: any) => { map[u.id] = u.name; });
+                setUnitNames(map);
             }
         } catch (error) {
             console.error("Error fetching members:", error);
@@ -193,11 +205,19 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
         if (!error) { setReplyText(prev => ({ ...prev, [noteId]: '' })); setActiveReplyId(null); fetchNotes(); }
     };
 
+    // UUID regex to identify client notes (context is a unit UUID)
+    const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
     const filteredNotes = useMemo(() => {
         return notes.filter(n => {
             const matchesSearch = (n.title?.toLowerCase().includes(searchTerm.toLowerCase()) || '') || n.content.toLowerCase().includes(searchTerm.toLowerCase()) || (n.context?.toLowerCase().includes(searchTerm.toLowerCase()) || '');
-            const matchesMy = filterMode === 'my' ? (n.assigned_to === currentUser.email || n.created_by === currentUser.email) : true;
-            return matchesSearch && matchesMy;
+            let matchesFilter = true;
+            if (filterMode === 'my') {
+                matchesFilter = n.assigned_to === currentUser.email || n.created_by === currentUser.email;
+            } else if (filterMode === 'clients') {
+                matchesFilter = !!(n.context && isUUID(n.context));
+            }
+            return matchesSearch && matchesFilter;
         });
     }, [notes, searchTerm, filterMode, currentUser.email]);
 
@@ -227,6 +247,9 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
                         </div>
                         <button onClick={() => setFilterMode('all')} className={`text-sm font-bold px-3 py-1.5 rounded-full border ${filterMode === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500'}`}>Todos</button>
                         <button onClick={() => setFilterMode('my')} className={`text-sm font-bold px-3 py-1.5 rounded-full border ${filterMode === 'my' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500'}`}>Minhas</button>
+                        <button onClick={() => setFilterMode('clients')} className={`text-sm font-bold px-3 py-1.5 rounded-full border flex items-center gap-1.5 ${filterMode === 'clients' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500'}`}>
+                            <Users size={14} /> Clientes
+                        </button>
                     </div>
                     <div className="relative w-full md:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -237,7 +260,7 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
 
             {viewMode === 'list' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {filteredNotes.map(note => <NoteCard key={note.id} note={note} onView={() => setViewingNote(note)} onEdit={handleOpenEdit} onStatusChange={(n, s) => { supabase.from('project_notes').update({ status: s, is_completed: s === 'completed' }).eq('id', n.id).then(() => fetchNotes()); }} onReply={handleAddReply} currentUser={currentUser} activeReplyId={activeReplyId} setActiveReplyId={setActiveReplyId} replyText={replyText} setReplyText={setReplyText} profileMap={profileMap} />)}
+                    {filteredNotes.map(note => <NoteCard key={note.id} note={note} onView={() => setViewingNote(note)} onEdit={handleOpenEdit} onStatusChange={(n: any, s: any) => { supabase.from('project_notes').update({ status: s, is_completed: s === 'completed' }).eq('id', n.id).then(() => fetchNotes()); }} onReply={handleAddReply} currentUser={currentUser} activeReplyId={activeReplyId} setActiveReplyId={setActiveReplyId} replyText={replyText} setReplyText={setReplyText} profileMap={profileMap} unitNames={unitNames} />)}
                 </div>
             ) : (
                 <div className="flex gap-4 overflow-x-auto pb-6">
@@ -247,7 +270,7 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
                                 <div className="flex items-center gap-2"><span className={`p-1.5 rounded-md ${status.color}`}>{status.icon}</span><span className="font-bold text-slate-700 text-base">{status.label}</span></div>
                             </div>
                             <div className="p-2 space-y-3">
-                                {kanbanColumns[status.id].map(note => <NoteCard key={note.id} note={note} onView={() => setViewingNote(note)} minimal profileMap={profileMap} onEdit={handleOpenEdit} />)}
+                                {kanbanColumns[status.id].map(note => <NoteCard key={note.id} note={note} onView={() => setViewingNote(note)} minimal profileMap={profileMap} onEdit={handleOpenEdit} unitNames={unitNames} />)}
                             </div>
                         </div>
                     ))}
@@ -405,11 +428,15 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, currentUser, userPr
     );
 };
 
-const NoteCard = ({ note, minimal, onEdit, onStatusChange, onReply, currentUser, activeReplyId, setActiveReplyId, replyText, setReplyText, profileMap, onView }: any) => {
+const NoteCard = ({ note, minimal, onEdit, onStatusChange, onReply, currentUser, activeReplyId, setActiveReplyId, replyText, setReplyText, profileMap, onView, unitNames }: any) => {
     const priorityInfo = PRIORITIES.find(p => p.id === (note.priority || 'medium'))!;
     const statusInfo = STATUSES.find(s => s.id === note.status)!;
     const creator = profileMap[note.created_by] || { name: note.created_by.split('@')[0], avatar: '' };
     const assignee = note.assigned_to ? (profileMap[note.assigned_to] || { name: note.assigned_to.split('@')[0], avatar: '' }) : null;
+
+    // Resolve context: if it's a UUID, show unit name with client badge
+    const isClientNote = note.context && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(note.context);
+    const contextLabel = isClientNote ? (unitNames?.[note.context] || 'Unidade') : note.context;
 
     if (minimal) {
         return (
@@ -440,7 +467,15 @@ const NoteCard = ({ note, minimal, onEdit, onStatusChange, onReply, currentUser,
                 <div className="flex justify-between items-start mb-3">
                     <div className="flex gap-2">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded border uppercase ${priorityInfo.color}`}>{priorityInfo.label}</span>
-                        {note.context && <span className="text-xs font-bold px-2 py-0.5 rounded border bg-slate-50 text-slate-600 flex items-center gap-1"><MapPin size={10} /> {note.context}</span>}
+                        {note.context && (
+                            isClientNote ? (
+                                <span className="text-xs font-bold px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1">
+                                    <Users size={10} /> {contextLabel}
+                                </span>
+                            ) : (
+                                <span className="text-xs font-bold px-2 py-0.5 rounded border bg-slate-50 text-slate-600 flex items-center gap-1"><MapPin size={10} /> {note.context}</span>
+                            )
+                        )}
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {onEdit && <button onClick={(e) => { e.stopPropagation(); onEdit(note); }} className="p-1.5 text-slate-400 hover:text-blue-600"><Edit2 size={14} /></button>}

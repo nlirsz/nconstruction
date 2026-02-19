@@ -250,7 +250,7 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, currentUser }) 
                 }
             });
         }
-        return locs;
+        return Array.from(new Set(locs));
     }, [project.structure]);
 
     const filteredPhotos = useMemo(() => {

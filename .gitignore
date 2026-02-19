@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Environment variables (CRITICAL: never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Database exports and scripts (contain PII and sensitive schema info)
+csv_supabase/
+*.csv
+schema_output.txt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

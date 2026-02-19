@@ -82,11 +82,29 @@ export const SuppliesTab: React.FC<SuppliesTabProps> = ({ project, currentUser, 
     }, [project.id]);
 
     const fetchMembers = async () => {
-        const { data } = await supabase
+        const { data: members } = await supabase
             .from('project_members')
-            .select('*, profiles:user_id(*)')
+            .select('*')
             .eq('project_id', project.id);
-        if (data) setProjectMembers(data);
+
+        if (members && members.length > 0) {
+            const userIds = members.map((m: any) => m.user_id);
+            const { data: profiles } = await supabase
+                .from('profiles')
+                .select('*')
+                .in('id', userIds);
+
+            const profilesMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+
+            const joinedData = members.map((m: any) => ({
+                ...m,
+                profiles: profilesMap.get(m.user_id)
+            }));
+
+            setProjectMembers(joinedData);
+        } else {
+            setProjectMembers([]);
+        }
     };
 
     const fetchOrders = async () => {
