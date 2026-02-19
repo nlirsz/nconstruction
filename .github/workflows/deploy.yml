@@ -45,9 +45,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            --build-arg VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }} \
-            --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }} \
-            --build-arg VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }} \
+            --build-arg "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" \
             -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
 
       - name: Push Docker image to GCR
