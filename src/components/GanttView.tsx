@@ -192,7 +192,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
 
             <div className="flex-1 overflow-auto custom-scrollbar bg-white relative">
                 {tabMode === 'list' ? (
-                    <div className="w-full min-w-[700px]">
+                    <div className="w-full md:min-w-[700px]">
                         {/* Desktop View */}
                         <table className="hidden md:table w-full text-left border-collapse">
                             <thead className="sticky top-0 bg-white z-20 shadow-sm border-b border-slate-200">
@@ -329,46 +329,36 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                             </tbody>
                         </table>
 
-                        {/* Mobile View */}
+                        {/* Mobile View - Compact */}
                         <div className="md:hidden divide-y divide-slate-100 bg-white">
                             {pendingTasks.length > 0 && (
-                                <div className="px-4 py-2 bg-slate-50/50 text-[8px] font-black text-slate-500 uppercase tracking-widest border-y border-slate-100 sticky top-0 z-10">Atividades em Aberto ({pendingTasks.length})</div>
+                                <div className="px-3 py-1.5 bg-slate-50/80 text-[7px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10">Em Aberto ({pendingTasks.length})</div>
                             )}
                             {pendingTasks.map((task) => {
                                 const isOverdue = new Date(task.end) < new Date() && task.progress < 100;
+                                const isActiveToday = new Date(task.start) <= new Date() && new Date(task.end) >= new Date() && task.status !== TaskStatus.COMPLETED;
                                 return (
-                                    <div key={task.id} className="p-4 active:bg-slate-50 transition-colors flex flex-col gap-3" onClick={() => handleOpenEdit(task)}>
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex flex-col gap-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-2 h-2 rounded-full shrink-0 ${getSectorColor(task.linked_phase_id)}`} />
-                                                    <span className="text-[8px] font-black text-slate-400 uppercase truncate">
-                                                        {projectLocations.find(l => l.id === task.linked_unit_id)?.label || 'Geral'}
-                                                    </span>
-                                                </div>
-                                                <h4 className="font-black text-[11px] text-slate-800 uppercase leading-none break-words pr-2">{task.name}</h4>
-                                                {isOverdue && (
-                                                    <span className="text-[7px] font-black bg-red-100 text-red-600 px-1 py-0.5 rounded-sm border border-red-200 self-start animate-pulse">ATRASADA</span>
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col items-end shrink-0 gap-1">
-                                                <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded border ${task.progress > 0 ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                                                    {task.status}
-                                                </span>
-                                                <div className="flex items-center gap-1 opacity-50">
-                                                    <Calendar size={8} />
-                                                    <span className="text-[7px] font-bold">{new Date(task.end).toLocaleDateString('pt-BR')}</span>
-                                                </div>
-                                            </div>
+                                    <div key={task.id} className={`px-3 py-2 active:bg-slate-50 transition-colors ${isActiveToday ? 'border-l-2 border-l-blue-500 bg-blue-50/20' : ''}`} onClick={() => handleOpenEdit(task)}>
+                                        {/* Row 1: Sector dot + Name + Status badge */}
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getSectorColor(task.linked_phase_id)}`} />
+                                            <span className="font-black text-[10px] text-slate-800 uppercase leading-tight truncate flex-1">{task.name}</span>
+                                            {isOverdue && (
+                                                <span className="text-[6px] font-black bg-red-100 text-red-600 px-1 rounded-sm border border-red-200 shrink-0">ATRASO</span>
+                                            )}
+                                            <span className="text-[8px] font-black text-slate-500 shrink-0">{task.progress}%</span>
                                         </div>
-                                        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg">
-                                            <div className="flex-1 h-1 bg-slate-200 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-500" style={{ width: `${task.progress}%` }}></div>
-                                            </div>
-                                            <span className="text-[9px] font-black text-slate-500">{task.progress}%</span>
-                                            <div className="flex items-center gap-1 pl-2 border-l border-slate-200" onClick={e => e.stopPropagation()}>
-                                                <button onClick={() => handleOpenAdd(task)} className="p-1.5 text-blue-600 active:bg-blue-100 rounded-lg"><GitBranch size={14} /></button>
-                                                <button onClick={() => onDeleteTask(task.id)} className="p-1.5 text-slate-300 active:text-red-600 rounded-lg"><Trash2 size={14} /></button>
+                                        {/* Row 2: Location + Date + Progress bar */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[7px] font-bold text-slate-400 uppercase truncate max-w-[80px]">
+                                                {projectLocations.find(l => l.id === task.linked_unit_id)?.label || 'Geral'}
+                                            </span>
+                                            <span className="text-slate-200">·</span>
+                                            <span className="text-[7px] font-bold text-slate-400 shrink-0">
+                                                {parseLocalDate(task.start).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} → {parseLocalDate(task.end).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                            </span>
+                                            <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden ml-1">
+                                                <div className="h-full bg-blue-500 transition-all" style={{ width: `${task.progress}%` }}></div>
                                             </div>
                                         </div>
                                     </div>
@@ -376,23 +366,20 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                             })}
 
                             {completedTasks.length > 0 && (
-                                <div className="px-4 py-2 bg-slate-50/50 text-[8px] font-black text-slate-500 uppercase tracking-widest border-y border-slate-100 sticky top-0 z-10">Atividades Concluídas ({completedTasks.length})</div>
+                                <div className="px-3 py-1.5 bg-slate-50/80 text-[7px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10">Concluídas ({completedTasks.length})</div>
                             )}
                             {completedTasks.map((task) => (
-                                <div key={task.id} className="p-4 opacity-70 flex flex-col gap-2" onClick={() => handleOpenEdit(task)}>
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
-                                            <h4 className="font-black text-[10px] text-slate-400 uppercase truncate line-through">{task.name}</h4>
-                                        </div>
-                                        <span className="text-[7px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 shrink-0">100%</span>
+                                <div key={task.id} className="px-3 py-1.5 opacity-60" onClick={() => handleOpenEdit(task)}>
+                                    <div className="flex items-center gap-1.5">
+                                        <CheckCircle2 size={10} className="text-emerald-500 shrink-0" />
+                                        <span className="font-black text-[9px] text-slate-400 uppercase truncate line-through flex-1">{task.name}</span>
+                                        <span className="text-[7px] font-black text-emerald-600 shrink-0">100%</span>
                                     </div>
-                                    <p className="text-[7px] font-bold text-slate-300 uppercase">Concluída em {new Date(task.end).toLocaleDateString('pt-BR')}</p>
                                 </div>
                             ))}
 
                             {tasks.length === 0 && (
-                                <div className="py-20 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nenhuma tarefa planejada</div>
+                                <div className="py-16 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nenhuma tarefa planejada</div>
                             )}
                         </div>
                     </div>
