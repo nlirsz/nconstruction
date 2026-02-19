@@ -339,7 +339,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                                 const isActiveToday = new Date(task.start) <= new Date() && new Date(task.end) >= new Date() && task.status !== TaskStatus.COMPLETED;
                                 return (
                                     <div key={task.id} className={`px-3 py-2 active:bg-slate-50 transition-colors ${isActiveToday ? 'border-l-2 border-l-blue-500 bg-blue-50/20' : ''}`} onClick={() => handleOpenEdit(task)}>
-                                        {/* Row 1: Sector dot + Name + Status badge */}
+                                        {/* Row 1: Sector dot + Name + Status badge + Actions */}
                                         <div className="flex items-center gap-1.5 mb-1">
                                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getSectorColor(task.linked_phase_id)}`} />
                                             <span className="font-black text-[10px] text-slate-800 uppercase leading-tight truncate flex-1">{task.name}</span>
@@ -347,6 +347,10 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                                                 <span className="text-[6px] font-black bg-red-100 text-red-600 px-1 rounded-sm border border-red-200 shrink-0">ATRASO</span>
                                             )}
                                             <span className="text-[8px] font-black text-slate-500 shrink-0">{task.progress}%</span>
+                                            <div className="flex items-center shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+                                                <button onClick={() => handleOpenAdd(task)} className="p-1 text-blue-500 active:bg-blue-100 rounded" title="Sequenciar"><GitBranch size={12} /></button>
+                                                <button onClick={() => onDeleteTask(task.id)} className="p-1 text-slate-300 active:text-red-600 rounded" title="Excluir"><Trash2 size={12} /></button>
+                                            </div>
                                         </div>
                                         {/* Row 2: Location + Date + Progress bar */}
                                         <div className="flex items-center gap-2">
@@ -374,6 +378,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                                         <CheckCircle2 size={10} className="text-emerald-500 shrink-0" />
                                         <span className="font-black text-[9px] text-slate-400 uppercase truncate line-through flex-1">{task.name}</span>
                                         <span className="text-[7px] font-black text-emerald-600 shrink-0">100%</span>
+                                        <button onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); }} className="p-1 text-slate-300 active:text-red-600 rounded shrink-0" title="Excluir"><Trash2 size={12} /></button>
                                     </div>
                                 </div>
                             ))}
