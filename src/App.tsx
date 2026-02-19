@@ -124,16 +124,27 @@ const App: React.FC = () => {
   };
 
   const fetchUserPermission = async (projectId: string) => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !projectId) return;
+    const userId = session.user.id;
+    const userEmail = session.user.email?.toLowerCase();
+
     const { data } = await supabase
       .from('unit_permissions')
       .select('*, unit:project_units(name)')
       .eq('project_id', projectId)
-      .eq('user_id', session.user.id)
+      .or(`user_id.eq.${userId}${userEmail ? `,email.eq."${userEmail}"` : ''}`)
       .eq('is_active', true)
       .maybeSingle();
 
-    setUserProjectPermission(data as UnitPermission);
+    if (data) {
+      // Auto-link user_id if it's missing (claiming the invite)
+      if (!data.user_id) {
+        await supabase.from('unit_permissions').update({ user_id: userId }).eq('id', data.id);
+      }
+      setUserProjectPermission(data as UnitPermission);
+    } else {
+      setUserProjectPermission(null);
+    }
   };
 
   const fetchProjects = async () => {
