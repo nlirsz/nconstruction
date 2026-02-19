@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, uploadFile, uploadImage } from '../services/supabaseClient';
+import { InsightSummary } from './InsightSummary';
 import { Project, UnitPermission, UserProfile, ProjectPhoto, ProjectDocument, DocumentCategory, PhaseConfig, Task } from '../types';
 import { DEFAULT_PHASES, getPhaseIcon, getPhaseColor } from '../constants';
 import {
@@ -531,6 +532,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ project, p
     // =========================================
     const renderOverview = () => (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Smart Monthly Report */}
+            <InsightSummary project={project} onViewDetails={() => setActiveTab('gallery')} />
+
             <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                     <Building2 size={120} />

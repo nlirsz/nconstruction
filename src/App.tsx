@@ -383,7 +383,7 @@ const App: React.FC = () => {
           projects={projects}
           permission={userProjectPermission}
           userProfile={userProfile}
-          onLogout={() => setSelectedProject(null)}
+          onLogout={() => { setSelectedProject(null); supabase.auth.signOut(); }}
           onSelectProject={(p) => setSelectedProject(p)}
           session={session}
         />
