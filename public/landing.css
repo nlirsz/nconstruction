@@ -337,6 +337,47 @@ body {
     background-clip: text;
 }
 
+.animated-gradient-text {
+    background-image: linear-gradient(to right, var(--cyan), var(--blue), #B19EEF, var(--cyan));
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+    animation: gradientTextAnim 8s linear infinite;
+}
+
+@keyframes gradientTextAnim {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    100% {
+        background-position: -300% 50%;
+    }
+}
+
+.shiny-text {
+    display: inline-block;
+    background-image: linear-gradient(120deg, var(--slate-400) 0%, var(--slate-400) 35%, #ffffff 50%, var(--slate-400) 65%, var(--slate-400) 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+    animation: shinyTextAnim 4s linear infinite;
+}
+
+@keyframes shinyTextAnim {
+    0% {
+        background-position: 150% center;
+    }
+
+    100% {
+        background-position: -50% center;
+    }
+}
+
 .hero-subtitle {
     font-size: 1.0625rem;
     color: var(--slate-400);

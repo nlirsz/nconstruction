@@ -34,12 +34,12 @@ class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div style={{ padding: '2rem', fontFamily: 'sans-serif', color: '#dc2626', backgroundColor: '#fef2f2', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-          <h1 style={{fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem'}}>Algo deu errado na inicialização.</h1>
-          <p style={{marginBottom: '1rem', color: '#374151'}}>Tente recarregar a página. Se o erro persistir, verifique o console.</p>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>Algo deu errado na inicialização.</h1>
+          <p style={{ marginBottom: '1rem', color: '#374151' }}>Tente recarregar a página. Se o erro persistir, verifique o console.</p>
           <pre style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #fca5a5', overflow: 'auto', maxWidth: '80%', fontSize: '0.8rem', textAlign: 'left' }}>
             {this.state.error?.message}
           </pre>
-          <button onClick={() => window.location.reload()} style={{marginTop: '2rem', padding: '0.75rem 1.5rem', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold'}}>
+          <button onClick={() => window.location.reload()} style={{ marginTop: '2rem', padding: '0.75rem 1.5rem', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}>
             Recarregar Página
           </button>
         </div>
@@ -57,10 +57,15 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+
+if (window.location.pathname === '/home') {
+  window.location.href = '/home.html';
+} else {
+  root.render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+}

@@ -63,7 +63,8 @@
 
     <!-- Hero -->
     <section class="hero">
-        <div class="hero-gradient-mesh"></div>
+        <div class="hero-gradient-mesh" id="darkveil-hero-bg"
+            style="position: absolute; inset: 0; z-index: 0; overflow: hidden;"></div>
         <div class="hero-grid-overlay"></div>
         <div class="hero-glow hero-glow-1"></div>
         <div class="hero-glow hero-glow-2"></div>
@@ -71,10 +72,12 @@
             <div class="hero-content" data-reveal>
                 <div class="hero-badge" data-reveal data-delay="100">
                     <span class="badge-dot"></span>
-                    <span>Plataforma de Gestão de Obras</span>
+                    <span class="shiny-text"
+                        style="background-image: linear-gradient(120deg, var(--slate-300) 0%, var(--slate-300) 40%, #ffffff 50%, var(--slate-300) 60%, var(--slate-300) 100%);">Plataforma
+                        de Gestão de Obras</span>
                 </div>
                 <h1 class="hero-title" data-reveal data-delay="200">
-                    Controle Total da<br>Sua Obra em <span class="text-gradient">Tempo Real</span>
+                    Controle Total da<br>Sua Obra em <span class="animated-gradient-text">Tempo Real</span>
                 </h1>
                 <p class="hero-subtitle" data-reveal data-delay="300">
                     Cronogramas inteligentes, controle de progresso por setor e documentação técnica centralizada — tudo
@@ -217,7 +220,8 @@
         <div class="container">
             <div class="section-header" data-reveal>
                 <span class="section-label">Recursos</span>
-                <h2 class="section-title">Tudo que você precisa<br><span class="text-gradient">em um só lugar</span>
+                <h2 class="section-title">Tudo que você precisa<br><span class="animated-gradient-text">em um só
+                        lugar</span>
                 </h2>
                 <p class="section-subtitle">Ferramentas profissionais para cada etapa de execução do seu projeto</p>
             </div>
@@ -304,7 +308,7 @@
         <div class="container">
             <div class="section-header" data-reveal>
                 <span class="section-label">Na prática</span>
-                <h2 class="section-title">Veja a plataforma <span class="text-gradient">em ação</span></h2>
+                <h2 class="section-title">Veja a plataforma <span class="animated-gradient-text">em ação</span></h2>
                 <p class="section-subtitle">Dados reais de uma obra fictícia: Residencial Park Alto — 8 pavimentos, 64
                     unidades</p>
             </div>
@@ -427,7 +431,8 @@
         <div class="container">
             <div class="section-header" data-reveal>
                 <span class="section-label">Diferenciais</span>
-                <h2 class="section-title">Por que escolher o<br><span class="text-gradient">nConstruction</span>?</h2>
+                <h2 class="section-title">Por que escolher o<br><span
+                        class="animated-gradient-text">nConstruction</span>?</h2>
             </div>
             <div class="benefits-grid">
                 <div class="benefit-card" data-reveal data-delay="0">
@@ -504,6 +509,19 @@
     </footer>
 
     <script src="/landing.js"></script>
+    <script type="module">
+        import { initDarkVeil } from '/darkveil.js';
+
+        // Initialize with user requested parameters
+        initDarkVeil('darkveil-hero-bg', {
+            hueShift: 0,
+            noiseIntensity: 0,
+            scanlineIntensity: 0,
+            speed: 0.5,
+            scanlineFrequency: 0,
+            warpAmount: 0
+        });
+    </script>
 </body>
 
 </html>

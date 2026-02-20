@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { Loader2, AlertCircle, Check, Building2, UserPlus, LogIn, ShieldAlert } from 'lucide-react';
 import { APP_LOGO_URL } from '../constants';
+import { GradientBlinds } from './GradientBlinds';
 
 export const Login: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
@@ -106,8 +107,22 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-slate-100 flex flex-col items-center">
+    <div className="relative min-h-screen flex items-center justify-center p-4 isolate">
+      <GradientBlinds
+        gradientColors={['#0570FB', '#81E8FF']}
+        angle={0}
+        noise={0.3}
+        blindCount={12}
+        blindMinWidth={50}
+        spotlightRadius={0.5}
+        spotlightSoftness={1}
+        spotlightOpacity={1}
+        mouseDampening={0.15}
+        distortAmount={0}
+        shineDirection="left"
+        mixBlendMode="lighten"
+      />
+      <div className="bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/20 flex flex-col items-center z-10">
         {/* LOGO AREA */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center shadow-2xl mb-4 overflow-hidden p-2">
@@ -118,7 +133,7 @@ export const Login: React.FC = () => {
         </div>
 
         {/* THIN TABS */}
-        <div className="w-full grid grid-cols-2 bg-slate-100 p-1 rounded-2xl mb-8">
+        <div className="w-full grid grid-cols-2 bg-slate-100/50 p-1 rounded-2xl mb-8">
           <button
             onClick={() => { setActiveTab('login'); setError(null); setSuccess(null); }}
             className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'login' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}

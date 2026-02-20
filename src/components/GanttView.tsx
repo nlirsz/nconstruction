@@ -392,9 +392,9 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                     <div className="min-w-fit flex flex-col relative w-full">
                         {/* Header Row: Corner + Dates */}
                         <div className="flex sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm min-w-max">
-                            <div className="sticky left-0 z-50 w-72 shrink-0 bg-white border-r border-slate-200 px-3 py-2 text-[8px] font-black uppercase text-slate-400 flex items-center justify-between shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]">
-                                <span>Atividade</span>
-                                <span className="opacity-50">{sortedTasks.length} Registros</span>
+                            <div className="sticky left-0 z-50 w-36 md:w-72 shrink-0 bg-white border-r border-slate-200 px-3 py-2 text-[8px] font-black uppercase text-slate-400 flex items-center justify-between shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]">
+                                <span className="truncate">Atividade</span>
+                                <span className="opacity-50 hidden md:inline">{sortedTasks.length} Reg.</span>
                             </div>
                             <div className="flex">
                                 {timelineDates.map((date, idx) => {
@@ -427,12 +427,12 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
 
                                 return (
                                     <div key={task.id} className="flex border-b border-slate-50 group hover:bg-slate-50/50 min-w-max">
-                                        <div className={`sticky left-0 z-30 w-72 shrink-0 bg-white border-r border-slate-100 px-3 py-2 flex flex-col justify-center overflow-hidden shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] group-hover:bg-blue-50/10 transition-colors ${isActiveToday ? 'bg-blue-50/80 border-l-4 border-l-blue-500' : ''}`}>
+                                        <div className={`sticky left-0 z-30 w-36 md:w-72 shrink-0 bg-white border-r border-slate-100 px-3 py-2 flex flex-col justify-center overflow-hidden shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] group-hover:bg-blue-50/10 transition-colors ${isActiveToday ? 'bg-blue-50/80 border-l-4 border-l-blue-500' : ''}`}>
                                             <div className="flex items-center gap-1.5">
-                                                <div className={`w-2 h-2 rounded-full shrink-0 ${getSectorColor(task.linked_phase_id)}`} />
+                                                <div className={`w-2 h-2 rounded-full shrink-0 hidden md:block ${getSectorColor(task.linked_phase_id)}`} />
                                                 <span className={`text-[9px] font-bold uppercase truncate leading-tight ${isActiveToday ? 'text-blue-700' : 'text-slate-800'}`}>{task.name}</span>
                                             </div>
-                                            <span className="text-[7px] font-semibold text-slate-400 uppercase truncate pl-3.5">{task.customId || 'Atividade Geral'}</span>
+                                            <span className="text-[7px] font-semibold text-slate-400 uppercase truncate md:pl-3.5">{task.customId || 'Atividade Geral'}</span>
                                         </div>
                                         <div className="flex relative h-10 items-center">
                                             <div

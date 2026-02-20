@@ -84,30 +84,40 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ project, currentUser
             setEditingDoc(doc);
             setNewDocTitle(doc.title);
             setNewDocCategory(doc.category);
-            setSelectedContexts([doc.context || 'Geral']);
+            setSelectedContexts([doc.context && doc.context !== '' ? doc.context : 'Geral']);
             setSelectedFile(null);
         } else {
             setEditingDoc(null);
             setNewDocTitle('');
             setNewDocCategory('architectural');
-            setSelectedContexts(['Geral']);
+            setSelectedContexts([]);
             setSelectedFile(null);
         }
         setIsModalOpen(true);
     };
 
     const toggleContext = (ctx: string) => {
-        setSelectedContexts(prev =>
-            prev.includes(ctx) ? prev.filter(c => c !== ctx) : [...prev, ctx]
-        );
+        setSelectedContexts(prev => {
+            if (prev.includes(ctx)) {
+                return prev.filter(c => c !== ctx);
+            }
+            if (editingDoc) return [ctx];
+            const list = prev.filter(c => c !== 'Geral');
+            return [...list, ctx];
+        });
     };
 
     const toggleFloorGroup = (floorLabel: string, units: string[]) => {
+        if (editingDoc) {
+            setSelectedContexts([floorLabel]);
+            return;
+        }
         const allSelected = units.every(u => selectedContexts.includes(u)) && selectedContexts.includes(floorLabel);
         if (allSelected) {
             setSelectedContexts(prev => prev.filter(c => c !== floorLabel && !units.includes(c)));
         } else {
-            setSelectedContexts(prev => [...new Set([...prev, floorLabel, ...units])]);
+            const list = selectedContexts.filter(c => c !== 'Geral');
+            setSelectedContexts([...new Set([...list, floorLabel, ...units])]);
         }
     };
 
@@ -129,8 +139,6 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ project, currentUser
             }
 
             if (editingDoc) {
-                // 1. Update the EXISTING document with the PRIMARY context (first one)
-                // This ensures we don't lose the record, just potentially move it or update it.
                 const primaryContext = selectedContexts[0];
 
                 const { error } = await supabase.from('project_documents').update({
@@ -142,24 +150,6 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ project, currentUser
                 }).eq('id', editingDoc.id);
 
                 if (error) throw error;
-
-                // 2. If user selected ADDITIONAL contexts, create NEW copies (clones) for them
-                if (selectedContexts.length > 1) {
-                    const additionalContexts = selectedContexts.slice(1);
-                    const inserts = additionalContexts.map(ctx => ({
-                        project_id: project.id,
-                        title: newDocTitle,
-                        category: newDocCategory,
-                        context: ctx,
-                        file_url: fileUrl,
-                        file_type: fileType,
-                        created_by: currentUser.email
-                    }));
-
-                    const { error: insertError } = await supabase.from('project_documents').insert(inserts);
-                    if (insertError) throw insertError;
-                }
-
             } else {
                 if (!fileUrl) throw new Error("Arquivo é obrigatório.");
                 const inserts = selectedContexts.map(ctx => ({
@@ -297,8 +287,8 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ project, currentUser
                                 </div>
                                 <div className="flex flex-col h-full min-h-[300px] md:min-h-[400px]">
                                     <div className="flex justify-between items-center mb-2.5">
-                                        <label className="block text-[10px] md:text-[11px] font-black text-slate-900 uppercase tracking-widest">Locais Vinculados ({selectedContexts.length})</label>
-                                        {selectedContexts.length > 0 && <button type="button" onClick={() => setSelectedContexts([])} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase hover:underline">Limpar</button>}
+                                        <label className="block text-[10px] md:text-[11px] font-black text-slate-900 uppercase tracking-widest">{editingDoc ? 'Local Vinculado' : `Locais Vinculados (${selectedContexts.length})`}</label>
+                                        {selectedContexts.length > 0 && <button type="button" onClick={() => setSelectedContexts(editingDoc ? ['Geral'] : [])} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase hover:underline">Limpar</button>}
                                     </div>
                                     <div className="relative mb-3">
                                         <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -352,7 +342,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ project, currentUser
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 md:py-4 bg-slate-100 text-slate-600 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase transition-all">Cancelar</button>
                                 <button type="submit" disabled={uploadLoading || selectedContexts.length === 0} className="flex-[2] py-3 md:py-4 bg-slate-900 text-white rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase shadow-xl flex items-center justify-center gap-2 md:gap-3 hover:bg-blue-600 disabled:opacity-50 transition-all">
                                     {uploadLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                                    {uploadLoading ? 'Vinculando...' : (editingDoc ? 'Atualizar' : `Vincular a ${selectedContexts.length} Locais`)}
+                                    {uploadLoading ? 'Salvando...' : (editingDoc ? 'Atualizar Documento' : `Vincular a ${selectedContexts.length} Locais`)}
                                 </button>
                             </div>
                         </form>

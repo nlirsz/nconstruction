@@ -14,11 +14,11 @@ import { DEFAULT_PHASES, getPhaseIcon, getPhaseColor } from '../constants';
 // Add CSS for hiding scrollbars but keeping functionality
 const scrollbarStyle = `
   :root {
-    --left-col-width: 160px;
+    --left-col-width: 200px;
   }
   @media (max-width: 640px) {
     :root {
-      --left-col-width: 120px;
+      --left-col-width: 150px;
     }
   }
   .custom-scrollbar::-webkit-scrollbar {
@@ -289,14 +289,14 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
                     <div className="overflow-auto flex-1 custom-scrollbar relative border-t border-slate-100">
                         <div className="min-w-max">
                             {/* HEADER FIXO DA MATRIZ */}
-                            <div className="grid gap-0 sticky top-0 z-[60] bg-slate-50 border-b border-slate-200" style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 55px)` }}>
+                            <div className="grid gap-0 sticky top-0 z-[60] bg-slate-50 border-b border-slate-200" style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 75px)` }}>
                                 <div className="sticky left-0 top-0 z-[70] bg-slate-100 px-4 py-3 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] flex items-center">
                                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Pavimento / Unidade</span>
                                 </div>
                                 {projectPhases.map(p => (
                                     <div key={p.id} className="text-center p-2 border-r border-slate-200 last:border-0 bg-slate-50 flex flex-col items-center justify-center min-h-[50px] group/head cursor-help">
                                         <div className={`w-6 h-6 rounded flex items-center justify-center text-white mb-1 shadow-sm transition-transform group-hover/head:scale-110 ${getPhaseColor(p.color)}`}>{getPhaseIcon(p.icon, 10)}</div>
-                                        <span className="text-[8px] font-black text-slate-600 uppercase truncate w-full px-1" title={p.label}>{p.code}</span>
+                                        <span className="text-[8px] font-black text-slate-600 uppercase break-words leading-[1.1] w-full px-1" title={p.label}>{p.label.length > 12 ? p.code : p.label}</span>
                                     </div>
                                 ))}
                             </div>
@@ -311,7 +311,7 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
                                     return (
                                         <div key={floor.floor} className="border-b border-slate-100 last:border-0">
                                             {/* LINHA DE PAVIMENTO */}
-                                            <div className={`grid gap-0 transition-all sticky left-0 z-[35] w-full border-b border-slate-200/50 ${isExpanded ? 'bg-blue-50/30' : 'bg-white hover:bg-slate-50'}`} style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 55px)` }}>
+                                            <div className={`grid gap-0 transition-all sticky left-0 z-[35] w-full border-b border-slate-200/50 ${isExpanded ? 'bg-blue-50/30' : 'bg-white hover:bg-slate-50'}`} style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 75px)` }}>
                                                 <div
                                                     onClick={() => toggleFloor(floor.floor)}
                                                     className="sticky left-0 z-[40] bg-inherit px-4 py-3 border-r border-slate-200 flex items-center gap-3 cursor-pointer transition-all shadow-[2px_0_5px_rgba(0,0,0,0.02)]"
@@ -341,13 +341,13 @@ export const UnitProgress: React.FC<UnitProgressProps> = ({ project, onNavigateT
                                             {isExpanded && (
                                                 <div className="bg-slate-50/30 animate-in slide-in-from-top-1 duration-200">
                                                     {floor.units.map((unit: any, uIdx: number) => (
-                                                        <div key={unit.id} className="grid gap-0 group/unit bg-transparent hover:bg-blue-50/50 border-b border-slate-100 last:border-0 transition-colors" style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 55px)` }}>
+                                                        <div key={unit.id} className="grid gap-0 group/unit bg-transparent hover:bg-blue-50/50 border-b border-slate-100 last:border-0 transition-colors" style={{ gridTemplateColumns: `var(--left-col-width) repeat(${projectPhases.length}, 75px)` }}>
                                                             <div
                                                                 onClick={() => { setSelectedUnitSummary({ floorLabel: fLabel, unit }); }}
-                                                                className="sticky left-0 z-[30] bg-white group-hover/unit:bg-blue-50/80 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.01)] px-4 py-2 text-[9px] font-bold text-slate-700 flex items-center gap-3 cursor-pointer transition-colors"
+                                                                className="sticky left-0 z-[30] bg-white group-hover/unit:bg-blue-50/80 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.01)] px-4 py-2 text-[10px] sm:text-xs md:text-xs font-bold text-slate-700 flex items-center gap-3 cursor-pointer transition-colors"
                                                             >
                                                                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0 animate-pulse"></div>
-                                                                <span className="truncate flex-1">{unit.name}</span>
+                                                                <span className="truncate flex-1 tracking-tight">{unit.name}</span>
                                                                 <ArrowRight size={10} className="text-slate-300 opacity-0 group-hover/unit:opacity-100 transition-all -translate-x-2 group-hover/unit:translate-x-0" />
                                                             </div>
                                                             {projectPhases.map(p => {
