@@ -14,12 +14,13 @@ interface DashboardProps {
     project: Project;
     tasks: Task[];
     setActiveTab?: (tab: string) => void;
-    onNavigateToExecution?: (unitId: string) => void;
+    onNavigateToExecution?: (unitId: string, phaseId?: string) => void;
 }
 
 interface PhaseDetailData {
     lastCompleted: string;
-    activeFronts: { id: string; label: string; progress: number }[];
+    activeFronts: { id: string; label: string; progress: number; floor: number; unitId: string }[];
+    allFronts: { id: string; label: string; progress: number; floor: number; unitId: string; status: 'completed' | 'active' | 'pending' }[];
     completedFloors: { id: string; label: string; date: Date }[];
     pendingFloors: string[];
     completedCount: number;
@@ -111,7 +112,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
         activePhases.forEach(phase => {
             let totalApplicableFloors = 0;
             let completedFloorsCount = 0;
-            const activeFronts: { id: string, label: string, progress: number }[] = [];
+            const activeFronts: { id: string, label: string, progress: number, floor: number, unitId: string }[] = [];
+            const allFronts: { id: string, label: string, progress: number, floor: number, unitId: string, status: 'completed' | 'active' | 'pending' }[] = [];
             const completedFloors: { id: string, label: string, date: Date }[] = [];
             const pendingFloors: string[] = [];
 
@@ -140,20 +142,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                     }
                 });
 
-                if (!floorIs0 && !floorIs100 && floorUnitCount > 0) {
-                    activeFronts.push({ id: level.id, label: level.label, progress: Math.round(floorTotalProgress / floorUnitCount) });
+                const floorProgress = floorUnitCount > 0 ? Math.round(floorTotalProgress / floorUnitCount) : 0;
+                let status: 'completed' | 'active' | 'pending' = 'pending';
+                if (floorIs100 && floorUnitCount > 0) status = 'completed';
+                else if (!floorIs0 && floorUnitCount > 0) status = 'active';
+
+                if (floorUnitCount > 0) {
+                    allFronts.push({
+                        id: level.id,
+                        label: level.label,
+                        progress: floorProgress,
+                        floor: level.display_order,
+                        unitId: units[0].id,
+                        status
+                    });
+
+                    if (status === 'active') {
+                        activeFronts.push({ id: level.id, label: level.label, progress: floorProgress, floor: level.display_order, unitId: units[0].id });
+                    }
+                    if (status === 'completed') {
+                        completedFloorsCount++;
+                        completedFloors.push({ id: level.id, label: level.label, date: latestCompletionDate });
+                    }
+                    if (status === 'pending') {
+                        pendingFloors.push(level.label);
+                    }
                 }
-                if (floorIs100 && floorUnitCount > 0) {
-                    completedFloorsCount++;
-                    completedFloors.push({ id: level.id, label: level.label, date: latestCompletionDate });
-                }
-                if (floorIs0 && floorUnitCount > 0) pendingFloors.push(level.label);
             }
 
             completedFloors.sort((a, b) => b.date.getTime() - a.date.getTime());
             result[phase.id] = {
                 lastCompleted: completedFloors.length > 0 ? completedFloors[0].label : "Início",
                 activeFronts,
+                allFronts,
                 completedFloors,
                 pendingFloors,
                 completedCount: completedFloorsCount,
@@ -527,35 +548,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ project, tasks, setActiveT
                                 <h4 className="text-[7px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                                     <LayoutGrid size={10} className="text-blue-500" /> Detalhamento por Pavimento
                                 </h4>
-                                <div className="space-y-1">
-                                    {/* Group by floor */}
-                                    {Array.from(new Set(phaseProgress[selectedSectorPhase.id]?.activeFronts.map(f => f.floor) || [])).sort((a: any, b: any) => b - a).map(floor => (
-                                        <div key={floor} className="border border-slate-100 rounded-lg overflow-hidden">
-                                            <div className="bg-slate-50 px-2 py-1 flex justify-between items-center border-b border-slate-100">
-                                                <span className="text-[8px] font-black text-slate-600 uppercase">{floor}º Pavimento</span>
-                                            </div>
-                                            <div className="p-1 space-y-1 bg-white">
-                                                {phaseProgress[selectedSectorPhase.id]?.activeFronts.filter(f => f.floor === floor).map((front, frontIdx) => (
-                                                    <div
-                                                        key={`${selectedSectorPhase.id}-${floor}-${front.id}-${frontIdx}`}
-                                                        className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded group cursor-pointer border border-transparent hover:border-blue-100 transition-all"
-                                                        onClick={() => onNavigateToExecution(front.id, selectedSectorPhase.id)}
-                                                    >
-                                                        <div className="flex items-center gap-2 overflow-hidden">
-                                                            <p className="text-[9px] font-bold text-slate-700 uppercase tracking-tighter truncate">{front.label}</p>
-                                                            <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
-                                                                <div className={`h-full ${front.progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${front.progress}%` }}></div>
-                                                            </div>
+                                <div className="space-y-1 bg-slate-50 p-1.5 border border-slate-100 rounded-lg">
+                                    {/* Sort all floors descending by floor number */}
+                                    {phaseProgress[selectedSectorPhase.id]?.allFronts?.sort((a, b) => b.floor - a.floor).map((front, frontIdx) => {
+                                        const isCompleted = front.status === 'completed';
+                                        const isPending = front.status === 'pending';
+                                        return (
+                                            <div
+                                                key={`${selectedSectorPhase.id}-${front.floor}-${front.id}-${frontIdx}`}
+                                                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border hover:shadow-sm transition-all relative overflow-hidden group ${isCompleted ? 'bg-emerald-50/50 border-emerald-100 hover:border-emerald-300' : isPending ? 'bg-white border-slate-100 opacity-60 hover:opacity-100 hover:border-slate-300' : 'bg-white border-blue-100 hover:border-blue-400'}`}
+                                                onClick={() => onNavigateToExecution?.(front.unitId, selectedSectorPhase.id)}
+                                            >
+                                                <div className="flex items-center gap-2 z-10 w-full pr-8">
+                                                    <div className={`w-2 h-2 rounded-full shrink-0 ${isCompleted ? 'bg-emerald-500' : isPending ? 'bg-slate-300' : 'bg-blue-500 animate-pulse'}`}></div>
+                                                    <p className={`text-[10px] font-black uppercase tracking-tight truncate ${isCompleted ? 'text-emerald-800' : isPending ? 'text-slate-500' : 'text-blue-900'}`}>{front.label}</p>
+                                                    {!isPending && !isCompleted && (
+                                                        <div className="flex-1 max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0 hidden sm:block">
+                                                            <div className="h-full bg-blue-500" style={{ width: `${front.progress}%` }}></div>
                                                         </div>
-                                                        <div className="flex items-center gap-2 shrink-0">
-                                                            <span className={`text-[8px] font-black ${front.progress === 100 ? 'text-emerald-600' : 'text-blue-600'}`}>{front.progress}%</span>
-                                                            <ArrowRight size={10} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0 z-10">
+                                                    <span className={`text-[9px] font-black ${isCompleted ? 'text-emerald-600' : isPending ? 'text-slate-400' : 'text-blue-600'}`}>{front.progress}%</span>
+                                                    <ArrowRight size={10} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
+                                                </div>
+                                                {/* Very subtle progress background for active fronts */}
+                                                {!isPending && !isCompleted && (
+                                                    <div className="absolute top-0 left-0 bottom-0 bg-blue-50/50 z-0 transition-all" style={{ width: `${front.progress}%` }}></div>
+                                                )}
+                                                {/* Completed background */}
+                                                {isCompleted && (
+                                                    <div className="absolute top-0 left-0 bottom-0 bg-emerald-500/5 z-0 transition-all w-full"></div>
+                                                )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Task, TaskStatus, Project, ProjectPhoto, PhaseConfig } from '../types';
 import {
     Calendar, ChevronLeft, ChevronRight, Plus, Edit3, X, Trash2, Save,
-    BarChart3, GripVertical, Loader2, AlertTriangle,
+    BarChart3, GripVertical, Loader2, AlertTriangle, Check,
     ArrowRight, MapPin, LocateFixed, Link2, MoreVertical, GitBranch,
     Link, Camera, Image as ImageIconLucide,
     CheckCircle2, Building2, ListChecks, ChevronDown, CheckSquare, Square,
@@ -125,8 +125,13 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
         e.preventDefault();
         setSaving(true);
         try {
-            if (isEditing) await onUpdateTask(formData);
-            else await onAddTask(formData);
+            const taskToSave = { ...formData };
+            if (taskToSave.progress === 100) taskToSave.status = TaskStatus.COMPLETED;
+            else if (taskToSave.progress > 0) taskToSave.status = TaskStatus.IN_PROGRESS;
+            else taskToSave.status = TaskStatus.NOT_STARTED;
+
+            if (isEditing) await onUpdateTask(taskToSave);
+            else await onAddTask(taskToSave);
             setIsModalOpen(false);
         } catch (error) {
             console.error("Erro ao salvar tarefa:", error);
@@ -153,6 +158,19 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
         setIsEditing(true);
         setFormData({ ...task, linked_subtasks: task.linked_subtasks || [], linked_unit_id: task.linked_unit_id || '', linked_phase_id: task.linked_phase_id || '' });
         setIsModalOpen(true);
+    };
+
+    const selectedPhaseConfig = useMemo(() => {
+        return projectPhases.find(p => p.id === formData.linked_phase_id);
+    }, [formData.linked_phase_id, projectPhases]);
+
+    const handleSubtaskToggle = (subtaskName: string) => {
+        const current = formData.linked_subtasks || [];
+        if (current.includes(subtaskName)) {
+            setFormData({ ...formData, linked_subtasks: current.filter(s => s !== subtaskName) });
+        } else {
+            setFormData({ ...formData, linked_subtasks: [...current, subtaskName] });
+        }
     };
 
     const pendingTasks = useMemo(() => {
@@ -543,6 +561,25 @@ export const GanttView: React.FC<GanttViewProps> = ({ tasks, projects, onAddTask
                                                 {projectPhases.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                                             </select>
                                         </div>
+
+                                        {selectedPhaseConfig && selectedPhaseConfig.subtasks && selectedPhaseConfig.subtasks.length > 0 && (
+                                            <div className="space-y-1.5 p-2 bg-white border border-slate-200 rounded-lg">
+                                                <label className="text-[8px] font-black text-slate-400 uppercase flex items-center gap-1.5"><ListChecks size={10} className="text-blue-500" /> Atividades Específicas da Execução</label>
+                                                <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                                                    {selectedPhaseConfig.subtasks.map((st) => (
+                                                        <label key={st} className="flex items-center gap-2 cursor-pointer group hover:bg-slate-50 p-1 rounded transition-colors"
+                                                            onClick={(e) => { e.preventDefault(); handleSubtaskToggle(st); }}
+                                                        >
+                                                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${formData.linked_subtasks?.includes(st) ? 'bg-blue-600 border-blue-600' : 'border-slate-300 group-hover:border-blue-400'}`}>
+                                                                {formData.linked_subtasks?.includes(st) && <Check size={10} className="text-white" strokeWidth={3} />}
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-slate-700 leading-tight uppercase truncate flex-1">{st}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                <p className="text-[7px] text-slate-400 font-bold leading-tight">* Se selecionado, o progresso desta tarefa baseia-se apenas nas atividades marcadas. Caso vazio, usará a etapa como um todo.</p>
+                                            </div>
+                                        )}
 
                                         <div className="space-y-1">
                                             <label className="text-[8px] font-black text-slate-400 uppercase flex items-center gap-1.5 ml-1"><ArrowRight size={10} className="text-blue-500" /> Atividade Precedente (Dependência)</label>

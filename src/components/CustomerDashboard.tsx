@@ -535,67 +535,67 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ project, p
             {/* Smart Monthly Report */}
             <InsightSummary project={project} onViewDetails={() => setActiveTab('gallery')} />
 
-            <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-5">
-                    <Building2 size={120} />
+            <section className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 md:p-8 opacity-5">
+                    <Building2 className="w-20 h-20 md:w-32 md:h-32" />
                 </div>
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
                     <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className={`${theme.bg} text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase`}>Minha Unidade</span>
-                            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{project.name}</span>
+                        <div className="flex items-center gap-2 mb-1.5 md:mb-2">
+                            <span className={`${theme.bg} text-white text-[9px] md:text-[10px] font-black px-2 py-0.5 rounded-full uppercase`}>Minha Unidade</span>
+                            <span className="text-slate-400 text-[9px] md:text-[10px] font-bold uppercase tracking-widest">{project.name}</span>
                         </div>
-                        <h2 className="text-xl md:text-3xl font-black text-slate-900 leading-tight">
+                        <h2 className="text-lg md:text-3xl font-black text-slate-900 leading-tight">
                             {unitName || 'Carregando...'}
                         </h2>
-                        <div className="flex items-center gap-2 mt-2 text-slate-500">
-                            <MapPin size={14} />
-                            <span className="text-xs font-medium">{project.address}</span>
+                        <div className="flex items-center gap-1.5 md:gap-2 mt-1 md:mt-2 text-slate-500">
+                            <MapPin size={12} className="shrink-0" />
+                            <span className="text-[10px] md:text-xs font-medium">{project.address}</span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4 md:gap-6 pt-3 border-t border-slate-50 md:border-0 md:pt-0">
                         <div className="text-center">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Status Geral</p>
-                            <div className="relative w-16 h-16">
+                            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase mb-1">Status Geral</p>
+                            <div className="relative w-12 h-12 md:w-16 md:h-16 mx-auto">
                                 <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                                     <circle cx="18" cy="18" r="14" fill="none" stroke="#e2e8f0" strokeWidth="3" />
                                     <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="3"
                                         strokeDasharray={`${(unitProgress?.percentage || 0) * 0.88} 88`}
                                         strokeLinecap="round" className="transition-all duration-1000" />
                                 </svg>
-                                <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-slate-900">
+                                <span className="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs font-black text-slate-900">
                                     {unitProgress?.percentage || 0}%
                                 </span>
                             </div>
                         </div>
-                        <div className="h-12 w-px bg-slate-100"></div>
+                        <div className="h-8 md:h-12 w-px bg-slate-100"></div>
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Previsão Entrega</p>
-                            <p className="text-sm font-black text-slate-800">
+                            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase mb-1">Entrega</p>
+                            <p className="text-xs md:text-sm font-black text-slate-800">
                                 {project.endDate ? (() => {
                                     const d = new Date(project.endDate + 'T12:00:00'); // Set midday to avoid timezone shifts
                                     if (project.deliveryFormat === 'semester') {
-                                        return `${d.getMonth() < 6 ? '1º Semestre' : '2º Semestre'} de ${d.getFullYear()}`;
+                                        return `${d.getMonth() < 6 ? '1º Sem' : '2º Sem'} ${d.getFullYear()}`;
                                     }
                                     const month = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
-                                    return `${month} de ${d.getFullYear()}`;
-                                })() : 'Em definição'}
+                                    return `${month} ${d.getFullYear()}`;
+                                })() : 'TBD'}
                             </p>
                         </div>
                     </div>
                 </div>
 
                 {/* Dual progress bars: Unit vs Building */}
-                <div className="mt-8 space-y-4">
+                <div className="mt-5 md:mt-8 space-y-4">
                     <div>
                         <div className="flex justify-between items-end mb-1.5">
-                            <span className="text-xs font-black text-slate-600 uppercase flex items-center gap-1.5">
-                                <div className={`w-2.5 h-2.5 rounded-full ${theme.dot}`}></div>
-                                Minha Unidade — {unitName}
+                            <span className="text-[10px] md:text-xs font-black text-slate-600 uppercase flex items-center gap-1.5">
+                                <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${theme.dot}`}></div>
+                                {unitName}
                             </span>
-                            <span className={`text-xs font-black ${theme.text}`}>{unitProgress?.percentage || 0}%</span>
+                            <span className={`text-[10px] md:text-xs font-black ${theme.text}`}>{unitProgress?.percentage || 0}%</span>
                         </div>
-                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+                        <div className="h-2.5 md:h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
                             <div
                                 className={`h-full bg-gradient-to-r ${theme.gradient} transition-all duration-1000 ease-out rounded-full`}
                                 style={{ width: `${unitProgress?.percentage || 0}%` }}

@@ -5,6 +5,8 @@ import { Loader2, AlertCircle, Check, Building2, UserPlus, LogIn, ShieldAlert } 
 import { APP_LOGO_URL } from '../constants';
 import { GradientBlinds } from './GradientBlinds';
 
+const LOGIN_BG_COLORS = ['#0570FB', '#81E8FF'];
+
 export const Login: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
@@ -15,16 +17,20 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(null);
 
+    const formData = new FormData(e.currentTarget);
+    const formEmail = (formData.get('email') as string) || email;
+    const formPassword = (formData.get('password') as string) || password;
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: formEmail,
+        password: formPassword,
       });
       if (error) throw error;
     } catch (err: any) {
@@ -109,7 +115,7 @@ export const Login: React.FC = () => {
   return (
     <div className="relative min-h-screen flex items-center justify-center p-4 isolate">
       <GradientBlinds
-        gradientColors={['#0570FB', '#81E8FF']}
+        gradientColors={LOGIN_BG_COLORS}
         angle={0}
         noise={0.3}
         blindCount={12}
@@ -171,7 +177,10 @@ export const Login: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">E-mail de Acesso</label>
               <input
+                id="email"
+                name="email"
                 type="email"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -182,7 +191,10 @@ export const Login: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Senha</label>
               <input
+                id="password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -220,7 +232,10 @@ export const Login: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Seu E-mail</label>
               <input
+                id="signup-email"
+                name="email"
                 type="email"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -232,7 +247,10 @@ export const Login: React.FC = () => {
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Definir Senha</label>
                 <input
+                  id="signup-password"
+                  name="password"
                   type="password"
+                  autoComplete="new-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -243,7 +261,10 @@ export const Login: React.FC = () => {
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Confirmar Senha</label>
                 <input
+                  id="signup-confirm-password"
+                  name="confirmPassword"
                   type="password"
+                  autoComplete="new-password"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

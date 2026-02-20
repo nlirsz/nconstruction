@@ -18,10 +18,12 @@ import { Login } from './components/Login';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { OrganizationSetup } from './components/OrganizationSetup';
 import { OrganizationSettings } from './components/OrganizationSettings';
-import { Project, Task, UserProfile, Organization, TaskStatus, UnitPermission } from './types';
-import { Menu, Database, Copy, Check, X, AlertTriangle, Bell, User as UserIcon } from 'lucide-react';
+import { Project, Task, UserProfile, Organization, TaskStatus, UnitPermission, LogEntry, Note, PhaseConfig } from './types';
+import { Menu, Database, Copy, Check, X, AlertTriangle, Bell, User as UserIcon, Loader2 } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
+import { DEFAULT_PHASES } from './constants';
 import { NotificationCenter } from './components/NotificationCenter';
+import { NotificationsTab } from './components/NotificationsTab';
 import { UserProfileModal } from './components/UserProfile';
 import { APP_LOGO_URL } from './constants';
 import { parseLocalDate, formatLocalDate, addDays, diffDays } from './utils/dateUtils';
@@ -326,16 +328,95 @@ const App: React.FC = () => {
     }
   };
 
+  const syncTaskToExecution = async (task: Task, isNew: boolean) => {
+    if (!selectedProject || !task.linked_unit_id || !task.linked_phase_id) return;
+
+    // Fetch Phase definition to get subtasks
+    const phaseConfig = (selectedProject.phases && selectedProject.phases.length > 0 ? selectedProject.phases : DEFAULT_PHASES).find(p => p.id === task.linked_phase_id);
+    if (!phaseConfig) return;
+
+    const { data: existingProgress } = await supabase.from('unit_progress')
+      .select('*')
+      .eq('unit_id', task.linked_unit_id)
+      .eq('phase_id', task.linked_phase_id)
+      .maybeSingle();
+
+    const targetSubtasks = task.linked_subtasks && task.linked_subtasks.length > 0
+      ? task.linked_subtasks
+      : phaseConfig.subtasks || [];
+
+    let currentSubtasksObj = existingProgress?.subtasks || {};
+
+    // Update the progress of targeted subtasks
+    targetSubtasks.forEach(st => {
+      const existingSt = currentSubtasksObj[st] || {};
+      currentSubtasksObj[st] = {
+        ...(typeof existingSt === 'object' ? existingSt : { progress: existingSt }),
+        progress: task.progress
+      };
+    });
+
+    // Recalculate phase percentage
+    let sum = 0;
+    let count = 0;
+    (phaseConfig.subtasks || []).forEach(st => {
+      const stData = currentSubtasksObj[st];
+      const prog = typeof stData === 'object' ? stData.progress : (stData || 0);
+      sum += prog;
+      count++;
+    });
+    const newPercentage = count > 0 ? Math.round(sum / count) : task.progress;
+
+    const payload: any = {
+      project_id: selectedProject.id,
+      unit_id: task.linked_unit_id,
+      phase_id: task.linked_phase_id,
+      percentage: newPercentage,
+      subtasks: currentSubtasksObj,
+      updated_at: new Date().toISOString()
+    };
+    if (existingProgress?.id) payload.id = existingProgress.id;
+
+    await supabase.from('unit_progress').upsert(payload, { onConflict: 'unit_id, phase_id' });
+
+    // Insert log
+    if (!isNew || task.progress > 0) {
+      const { data: unitData } = await supabase.from('project_units').select('name').eq('id', task.linked_unit_id).single();
+      const unitName = unitData?.name || 'Unidade';
+
+      await supabase.from('project_logs').insert({
+        project_id: selectedProject.id,
+        category: 'unit',
+        title: `Cronograma: ${phaseConfig.label} @ ${unitName}`,
+        details: `Tarefa "${task.name}" atualizou o progresso para ${task.progress}% nas frentes da unidade.`,
+        new_value: task.progress,
+        user_name: userProfile?.full_name || 'Usuário',
+        user_avatar: userProfile?.avatar_url,
+        date: new Date().toISOString()
+      });
+    }
+  };
+
   const handleAddTask = async (task: Omit<Task, 'id'>) => {
-    const { error } = await supabase.from('tasks').insert({
+    const { data: newTask, error } = await supabase.from('tasks').insert({
       project_id: task.projectId,
       name: task.name,
       start: task.start,
       end: task.end,
       progress: task.progress,
-      status: task.status
-    });
-    if (!error && selectedProject) fetchTasks(selectedProject.id);
+      status: task.status,
+      linked_unit_id: task.linked_unit_id,
+      linked_phase_id: task.linked_phase_id,
+      linked_subtasks: task.linked_subtasks,
+      dependencies: task.dependencies
+    }).select().single();
+
+    if (!error && newTask && selectedProject) {
+      if (newTask.linked_unit_id && newTask.linked_phase_id) {
+        await syncTaskToExecution({ ...newTask, projectId: newTask.project_id }, true);
+      }
+      fetchTasks(selectedProject.id);
+    }
   };
 
   const handleUpdateTask = async (updatedTask: Task) => {
@@ -349,15 +430,10 @@ const App: React.FC = () => {
       linked_phase_id: updatedTask.linked_phase_id,
       linked_subtasks: updatedTask.linked_subtasks
     }).eq('id', updatedTask.id);
+
     if (!error && selectedProject) {
       if (updatedTask.linked_unit_id && updatedTask.linked_phase_id) {
-        const { data: existingProgress } = await supabase.from('unit_progress').select('*').eq('unit_id', updatedTask.linked_unit_id).eq('phase_id', updatedTask.linked_phase_id).maybeSingle();
-        const updatedSubtasks = updatedTask.linked_subtasks || [];
-        if (existingProgress) {
-          await supabase.from('unit_progress').update({ subtasks: updatedSubtasks, updated_at: new Date().toISOString() }).eq('id', existingProgress.id);
-        } else {
-          await supabase.from('unit_progress').insert({ project_id: updatedTask.projectId, unit_id: updatedTask.linked_unit_id, phase_id: updatedTask.linked_phase_id, subtasks: updatedSubtasks, updated_at: new Date().toISOString() });
-        }
+        await syncTaskToExecution(updatedTask, false);
       }
       fetchTasks(selectedProject.id);
     }
@@ -415,26 +491,32 @@ const App: React.FC = () => {
       case 'supplies': return <SuppliesTab project={selectedProject} currentUser={session?.user} userProfile={userProfile} />;
       case 'documents': return <DocumentsTab project={selectedProject} currentUser={session?.user} userProfile={userProfile} />;
       case 'asbuilt': return <AsBuiltTab project={selectedProject} currentUser={session?.user} />;
+      case 'notifications': return <NotificationsTab projects={projects} onSelectProject={(p) => setSelectedProject(p)} currentUser={session?.user} />;
       default: return <Dashboard project={selectedProject} tasks={projectTasks} setActiveTab={setActiveTab} onNavigateToExecution={handleNavigateToExecution} />;
     }
   };
 
-  if (loadingSession) return <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">Verificando sessão...</div>;
+  if (loadingSession || loadingOrgs || loadingProjects || loadingPermission) {
+    return (
+      <div className="flex bg-[#f3f4f6] h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 size={32} className="animate-spin text-blue-600" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carregando ambiente...</span>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) return <Login />;
 
-  if (!loadingOrgs && !loadingProjects && !loadingSession) {
-    const hasAnyOrg = organizations.length > 0;
-    const hasAnyProject = projects.length > 0;
-    const isMainAdmin = session.user.email === 'luhrsnicolas@gmail.com' || session.user.email === 'teste@teste.com';
-    const isPotentiallyClient = !hasAnyOrg && hasAnyProject;
+  const hasAnyOrg = organizations.length > 0;
+  const hasAnyProject = projects.length > 0;
+  const isMainAdmin = session.user.email === 'luhrsnicolas@gmail.com' || session.user.email === 'teste@teste.com';
+  const isPotentiallyClient = !hasAnyOrg && hasAnyProject;
 
-    // Only show Organization Setup if we are SURE user is not a client with projects
-    if (!hasAnyOrg && !hasAnyProject && !isMainAdmin && !isPotentiallyClient) {
-      return <OrganizationSetup currentUser={session.user} onOrganizationCreated={(org) => { setOrganizations([org]); setCurrentOrganization(org); fetchProjects(); }} />;
-    }
-  } else {
-    // Show loading while ANY critical data is fetching
-    return <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">Carregando ambiente...</div>;
+  // Only show Organization Setup if we are SURE user is not a client with projects
+  if (!hasAnyOrg && !hasAnyProject && !isMainAdmin && !isPotentiallyClient && !selectedProject) {
+    return <OrganizationSetup currentUser={session.user} onOrganizationCreated={(org) => { setOrganizations([org]); setCurrentOrganization(org); fetchProjects(); }} />;
   }
 
   if (!selectedProject) {
@@ -446,10 +528,7 @@ const App: React.FC = () => {
     );
   }
 
-  // Prevent flash while determining role
-  if (loadingPermission) {
-    return <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">Carregando permissões...</div>;
-  }
+
 
   // CLIENT/ARCHITECT: Render CustomerDashboard fullscreen (no staff sidebar)
   if (isGuestUser) {
@@ -472,7 +551,7 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <NotificationCenter projects={projects} onSelectProject={setSelectedProject} currentUser={session.user} iconClassName="text-white hover:bg-white/10" />
+          <NotificationCenter projects={projects} onSelectProject={setSelectedProject} currentUser={session.user} iconClassName="text-white hover:bg-white/10" onViewAll={() => setActiveTab('notifications')} />
           <button onClick={() => setIsProfileOpen(true)} className="w-7 h-7 rounded-full border border-white/20 overflow-hidden">
             {userProfile?.avatar_url ? <img src={userProfile.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-white/10 text-white"><UserIcon size={14} /></div>}
           </button>

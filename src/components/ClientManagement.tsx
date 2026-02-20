@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { Project, LevelConfig, UnitPermission, UserProfile } from '../types';
-import { Users, Mail, UserPlus, Trash2, ShieldCheck, CheckCircle2, XCircle, Info, ChevronRight, LayoutGrid, Building2, Car, Warehouse, Coffee, AlertCircle } from 'lucide-react';
+import { Users, Mail, UserPlus, Trash2, ShieldCheck, CheckCircle2, XCircle, Info, ChevronRight, LayoutGrid, Building2, Car, Warehouse, Coffee, AlertCircle, Upload, Download } from 'lucide-react';
 
 interface ClientManagementProps {
     project: Project;
@@ -149,6 +149,106 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ project, lev
         }
     };
 
+    const handleDownloadTemplate = () => {
+        const headers = ["nome", "Cargo / Função", "Email", "Telefone", "unidade", "observação interna"];
+        const csvContent = "\ufeff" + headers.join(";") + "\n";
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "template_clientes_arquitetos.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setSaving(true);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const text = event.target?.result as string;
+                const rows = text.split('\n').filter(row => row.trim() !== '');
+                if (rows.length < 2) throw new Error("O arquivo está vazio ou não possui cabeçalho.");
+
+                // Identify separator (comma or semicolon)
+                const headerLine = rows[0];
+                const separator = headerLine.includes(';') ? ';' : ',';
+
+                const headers = headerLine.split(separator).map(h => h.trim().toLowerCase());
+
+                const getColIndex = (names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
+                const emailIdx = getColIndex(['email', 'e-mail']);
+                const nameIdx = getColIndex(['nome']);
+                const roleIdx = getColIndex(['cargo', 'função']);
+                const phoneIdx = getColIndex(['telefone', 'celular']);
+                const unitIdx = getColIndex(['unidade', 'apartamento', 'apto']);
+                const notesIdx = getColIndex(['observação', 'obs', 'interna']);
+
+                if (emailIdx === -1 || unitIdx === -1) {
+                    throw new Error("Colunas obrigatórias não encontradas: Email e/ou Unidade.");
+                }
+
+                const payload: any[] = [];
+                const errors: string[] = [];
+
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i].split(separator).map(c => c.trim());
+                    const email = row[emailIdx]?.toLowerCase();
+                    const unitName = row[unitIdx];
+
+                    if (!email || !email.includes('@')) {
+                        errors.push(`Linha ${i + 1}: E-mail inválido.`);
+                        continue;
+                    }
+
+                    if (!unitName) {
+                        errors.push(`Linha ${i + 1}: Unidade não informada.`);
+                        continue;
+                    }
+
+                    // Find matching unit
+                    const matchingUnit = allUnits.find(u => u.name.toLowerCase() === unitName.toLowerCase());
+                    if (!matchingUnit) {
+                        errors.push(`Linha ${i + 1}: Unidade "${unitName}" não encontrada na estrutura.`);
+                        continue;
+                    }
+
+                    payload.push({
+                        project_id: project.id,
+                        email: email,
+                        unit_id: matchingUnit.id,
+                        role: role, // uses current selected role (client/architect) as default
+                        job_title: roleIdx !== -1 && row[roleIdx] ? row[roleIdx] : '',
+                        phone: phoneIdx !== -1 && row[phoneIdx] ? row[phoneIdx] : '',
+                        notes: notesIdx !== -1 && row[notesIdx] ? row[notesIdx] : '',
+                        common_areas: commonAreas,
+                        is_active: true
+                    });
+                }
+
+                if (payload.length > 0) {
+                    const { error } = await supabase.from('unit_permissions').upsert(payload, { onConflict: 'project_id, unit_id, email' });
+                    if (error) throw error;
+                    fetchPermissions();
+                    alert(`${payload.length} convites importados e cadastrados com sucesso! \n\n${errors.length > 0 ? "Erros pulados:\n" + errors.join('\n') : ""}`);
+                } else if (errors.length > 0) {
+                    alert(`Nenhum convite válido importado.\n\nErros:\n${errors.join('\n')}`);
+                }
+            } catch (err: any) {
+                alert("Erro ao processar CSV: " + err.message);
+                console.error(err);
+            } finally {
+                setSaving(false);
+                if (e.target) e.target.value = ''; // Reset input
+            }
+        };
+        reader.readAsText(file);
+    };
+
     const handleDeletePermission = async (id: string) => {
         if (!window.confirm('Remover este acesso?')) return;
 
@@ -210,10 +310,22 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ project, lev
                 {/* COLUNA DE CONVITE */}
                 <div className="lg:col-span-1 space-y-5">
                     <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <UserPlus size={14} className="text-slate-400" />
-                            Novo Acesso
-                        </h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                                <UserPlus size={14} className="text-slate-400" />
+                                Novo Acesso
+                            </h3>
+
+                            <div className="flex gap-2">
+                                <button onClick={handleDownloadTemplate} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded bg-slate-50 transition-colors" title="Baixar Template CSV">
+                                    <Download size={14} />
+                                </button>
+                                <label className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded bg-slate-50 transition-colors cursor-pointer" title="Importar CSV em Massa">
+                                    <Upload size={14} />
+                                    <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                                </label>
+                            </div>
+                        </div>
 
                         <div className="space-y-4">
                             {/* E-MAILS */}

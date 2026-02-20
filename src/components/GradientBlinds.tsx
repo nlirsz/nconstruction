@@ -40,7 +40,7 @@ interface GradientBlindsProps {
     mixBlendMode?: any;
 }
 
-export const GradientBlinds: React.FC<GradientBlindsProps> = ({
+export const GradientBlinds = React.memo(({
     className = '',
     dpr,
     paused = false,
@@ -365,4 +365,4 @@ void main() {
             }}
         />
     );
-};
+});
