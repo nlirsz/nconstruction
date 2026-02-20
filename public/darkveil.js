@@ -64,6 +64,22 @@ void mainImage(out vec4 fragColor,in vec2 fragCoord){
 
 void main(){
     vec4 col;mainImage(col,gl_FragCoord.xy);
+    
+    // --- MODIFICAÇÃO PARA AZUL CLARO E FUNDO ESCURO ---
+    // Converte a cor gerada pelo padrão para intensidade de brilho (escala de cinza)
+    float lum = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+    
+    // Aumenta o contraste: escurece os tons médios para deixar o fundo quase preto
+    lum = pow(lum, 1.6); 
+    
+    // Mapeia essa intensidade para uma paleta personalizada
+    vec3 fundoEscuro = vec3(0.00, 0.01, 0.05); // Quase preto
+    vec3 ondaAzul = vec3(0.10, 0.60, 1.00);    // Ondas em azul claro neon
+    
+    // Multiplica o lum por um fator para os brilhos ficarem intensos
+    col.rgb = mix(fundoEscuro, ondaAzul, clamp(lum * 1.5, 0.0, 1.0)); 
+    // -----------------------------------
+
     col.rgb=hueShiftRGB(col.rgb,uHueShift);
     float scanline_val=sin(gl_FragCoord.y*uScanFreq)*0.5+0.5;
     col.rgb*=1.-(scanline_val*scanline_val)*uScan;

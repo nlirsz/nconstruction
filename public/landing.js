@@ -98,7 +98,7 @@ document.querySelectorAll('.metrics-grid, .hero-ui-card').forEach(el => {
 const progressObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
-            const fills = entry.target.querySelectorAll('.ui-progress-fill, .mock-bar-fill');
+            const fills = entry.target.querySelectorAll('.ui-progress-fill, .mock-bar-fill, .glass-progress-fill');
             fills.forEach(fill => {
                 const width = fill.style.width;
                 fill.style.width = '0%';
@@ -111,7 +111,7 @@ const progressObserver = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.2 });
 
-document.querySelectorAll('.hero-ui-card, .app-mockup, .showcase-card').forEach(el => {
+document.querySelectorAll('.hero-ui-card, .hero-glass-card, .showcase-card').forEach(el => {
     progressObserver.observe(el);
 });
 

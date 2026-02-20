@@ -35,6 +35,9 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
     const [massUpdateData, setMassUpdateData] = useState({ phaseId: '', progress: 0, subtasks: [] as string[] });
     const [massSelectedUnits, setMassSelectedUnits] = useState<string[]>([]);
     const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+    const [scheduleModal, setScheduleModal] = useState<{ isOpen: boolean, subtaskName: string, progress: number, unitId: string, phaseId: string, locationLabel: string } | null>(null);
+    const [scheduleStart, setScheduleStart] = useState(new Date().toISOString().split('T')[0]);
+    const [scheduleEnd, setScheduleEnd] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
 
     const projectPhases: PhaseConfig[] = useMemo(() => {
         return (project.phases && project.phases.length > 0) ? project.phases : DEFAULT_PHASES;
@@ -915,6 +918,26 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
                                                     <span className="text-[10px] font-bold text-slate-800 uppercase leading-tight w-2/3">{name}</span>
                                                     <div className="flex items-center gap-3">
                                                         <button
+                                                            onClick={() => {
+                                                                const floorLabel = getFloorLabel(data[selectedUnit.fIdx].floor);
+                                                                const locLabel = `${floorLabel} • ${data[selectedUnit.fIdx].units[selectedUnit.uIdx].name}`;
+                                                                setScheduleStart(new Date().toISOString().split('T')[0]);
+                                                                setScheduleEnd(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+                                                                setScheduleModal({
+                                                                    isOpen: true,
+                                                                    subtaskName: name,
+                                                                    progress: progress,
+                                                                    unitId: data[selectedUnit.fIdx].units[selectedUnit.uIdx].id,
+                                                                    phaseId: activePhaseId,
+                                                                    locationLabel: locLabel
+                                                                });
+                                                            }}
+                                                            className="text-indigo-600 hover:bg-indigo-100 p-1 rounded transition-colors"
+                                                            title="Agendar no Cronograma"
+                                                        >
+                                                            <Calendar size={12} />
+                                                        </button>
+                                                        <button
                                                             onClick={() => handleAddPhoto(name)}
                                                             className="text-blue-600 hover:bg-blue-100 p-1 rounded transition-colors"
                                                         >
@@ -953,6 +976,61 @@ export const ExecutionTab: React.FC<ExecutionTabProps> = ({ project, onUpdatePro
                             <button onClick={handleSaveProgressOnly} disabled={saving} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold text-xs uppercase tracking-widest shadow-md hover:bg-slate-800 disabled:opacity-70 transition-all flex items-center gap-2">
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                                 Salvar Auditoria
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Schedule Subtask Modal */}
+            {scheduleModal?.isOpen && (
+                <div className="fixed inset-0 z-[250] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center md:p-4 animate-in fade-in duration-300">
+                    <div className="w-full h-full md:h-auto md:max-w-md bg-white rounded-none md:rounded-2xl shadow-2xl flex flex-col animate-in zoom-in duration-300">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm flex items-center gap-2">
+                                <Calendar size={18} className="text-indigo-600" /> Agendar Atividade
+                            </h3>
+                            <button onClick={() => setScheduleModal(null)} className="text-slate-400 p-2 hover:bg-white rounded-xl transition-all"><X size={20} /></button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{scheduleModal.locationLabel}</p>
+                                <p className="text-sm font-bold text-slate-800">{scheduleModal.subtaskName}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Início</label>
+                                    <input type="date" value={scheduleStart} onChange={e => setScheduleStart(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Fim</label>
+                                    <input type="date" value={scheduleEnd} onChange={e => setScheduleEnd(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold outline-none" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+                            <button onClick={() => setScheduleModal(null)} className="px-4 py-2 text-[10px] font-black uppercase text-slate-500 hover:text-slate-800">Cancelar</button>
+                            <button onClick={async () => {
+                                setSaving(true);
+                                try {
+                                    await supabase.from('tasks').insert({
+                                        project_id: project.id,
+                                        name: `${scheduleModal.subtaskName} - ${scheduleModal.locationLabel}`,
+                                        start: scheduleStart,
+                                        end: scheduleEnd,
+                                        progress: scheduleModal.progress,
+                                        status: scheduleModal.progress === 100 ? 'done' : scheduleModal.progress > 0 ? 'in-progress' : 'todo',
+                                        linked_unit_id: scheduleModal.unitId,
+                                        linked_phase_id: scheduleModal.phaseId,
+                                        linked_subtasks: [scheduleModal.subtaskName]
+                                    });
+                                    setScheduleModal(null);
+                                } catch (e) {
+                                    console.error("Erro ao agendar atividade", e);
+                                }
+                                setSaving(false);
+                            }} disabled={saving} className="px-6 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-lg shadow hover:bg-indigo-700 flex gap-2 items-center disabled:opacity-50">
+                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />} Agendar
                             </button>
                         </div>
                     </div>
